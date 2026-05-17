@@ -89,7 +89,7 @@ Rules you MUST follow:
 6. Create 2-5 wiki pages about key concepts from this specific source
 7. Use [[wikilinks]] to link to related pages by their slug
 
-Return a JSON array of pages. Each page must include:
+Return JSON with a "pages" key containing an array. Each page must include:
 - slug: lowercase-hyphenated
 - title: human readable
 - type: concept | person | place | event | tool | organization

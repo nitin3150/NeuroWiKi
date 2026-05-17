@@ -31,11 +31,11 @@ export async function waitForIngestion(
       file_ids: sourceId,
     })
     const status = (res as any)?.statuses?.[0]?.indexing_status
-    // errored is the only terminal failure state
     if (status === 'errored') {
       console.warn(`HydraDB: source ${sourceId} errored`)
       return false
     }
+    // queued/processing/graph_creation = data accessible, indexing in progress
     return true
   } catch {
     return true // upload succeeded, assume indexing will complete
