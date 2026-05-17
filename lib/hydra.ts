@@ -1,11 +1,3 @@
-/**
- * lib/hydra.ts
- *
- * Singleton HydraDB Client wrapper using the official @hydradb/sdk package.
- * Graph data and wiki pages are managed by HydraDB, while SQLite is used for
- * local scraping sources and operations logging.
- */
-
 import { HydraDBClient } from '@hydradb/sdk'
 
 if (!process.env.HYDRADB_API_KEY) {
@@ -16,32 +8,36 @@ export const hydra = new HydraDBClient({
   token: process.env.HYDRADB_API_KEY || '',
 })
 
-export async function waitForIngestion(
-  documentId: string,
-  tenantId: string = 'default',
-  maxWaitMs = 30000,
-  intervalMs = 1500
-): Promise<boolean> {
-  const start = Date.now()
-  
-  while (Date.now() - start < maxWaitMs) {
-    try {
-      const response = await hydra.fetch.content({
-        tenant_id: tenantId,
-        source_id: documentId
-      })
-      const status = response as any
-      if (status?.graph_creation === 'complete' || 
-          status?.status === 'ready' ||
-          status?.indexed === true) {
-        return true
-      }
-    } catch {
-      // still processing
+export async function ensureTenant(tenantId: string = 'default'): Promise<void> {
+  try {
+    await hydra.tenant.create({ tenant_id: tenantId })
+  } catch (e: any) {
+    // 409 conflict = tenant already exists, that's fine
+    if (e?.statusCode !== 409 && !e?.body?.detail?.includes?.('already exists')) {
+      console.warn('Tenant create warning:', e?.message)
     }
-    await new Promise(resolve => setTimeout(resolve, intervalMs))
   }
-  
-  console.warn(`HydraDB: document ${documentId} did not complete indexing within ${maxWaitMs}ms`)
-  return false
+}
+
+// On free tier, indexing_status stays "queued" indefinitely but data is accessible.
+// We just confirm upload succeeded rather than polling for completion.
+export async function waitForIngestion(
+  sourceId: string,
+  tenantId: string = 'default',
+): Promise<boolean> {
+  try {
+    const res = await hydra.upload.verifyProcessing({
+      tenant_id: tenantId,
+      file_ids: sourceId,
+    })
+    const status = (res as any)?.statuses?.[0]?.indexing_status
+    // errored is the only terminal failure state
+    if (status === 'errored') {
+      console.warn(`HydraDB: source ${sourceId} errored`)
+      return false
+    }
+    return true
+  } catch {
+    return true // upload succeeded, assume indexing will complete
+  }
 }

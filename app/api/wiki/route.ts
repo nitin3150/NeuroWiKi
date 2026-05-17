@@ -21,13 +21,13 @@ export async function GET() {
       }
     }
 
-    const items: any[] = response?.results ?? response?.data ?? response?.items ?? []
+    const items: any[] = response?.sources ?? []
 
     const pages = items.map((item: any) => ({
-      slug: (item.additional_metadata?.slug as string) || item.id,
+      slug: (item.document_metadata?.slug as string) || item.id,
       title: (item.title as string) || '',
-      type: (item.additional_metadata?.type as string) || (item.metadata?.category as string) || 'concept',
-      summary: (item.metadata?.summary as string) || '',
+      type: (item.document_metadata?.category as string) || 'concept',
+      summary: (item.document_metadata?.summary as string) || '',
       created_at: (item.timestamp as string) || '',
     }))
 

@@ -18,20 +18,19 @@ const ContradictionSchema = z.object({
 
 async function getPageBySlug(slug: string) {
   try {
-    const res = await hydra.fetch.content({
+    const res = await hydra.fetch.listData({
       tenant_id: 'default',
-      source_id: slug
+      kind: 'knowledge',
+      source_ids: [slug],
     }) as any
-    
-    if (res) {
+    const item = (res?.sources ?? [])[0]
+    if (item) {
       return {
         slug,
-        title: res.title || '',
-        content: res.description || res.content?.text || '',
-        type: res.additional_metadata?.type || res.metadata?.category || 'concept',
-        summary: res.metadata?.summary || '',
-        originalMetadata: res.metadata,
-        originalAdditionalMetadata: res.additional_metadata,
+        title: item.title || '',
+        content: item.content?.markdown || item.content?.text || '',
+        type: item.document_metadata?.category || 'concept',
+        summary: item.document_metadata?.summary || '',
       }
     }
   } catch (error) {
@@ -95,7 +94,8 @@ Return JSON only.
 `
 
   const { object } = await generateObject({
-    model: google('gemini-1.5-pro'), // Use 1.5-pro as it's correctly configured
+    model: google('gemini-2.5-flash'),
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     schema: ContradictionSchema,
     prompt,
   })

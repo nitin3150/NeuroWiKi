@@ -7,67 +7,70 @@ export async function POST(req: Request) {
   const { question } = await req.json()
   if (!question?.trim()) return Response.json({ error: 'No question' }, { status: 400 })
 
-  // Strategy 1: Try graph-aware recall first (uses entity relationships)
-  let contextPages: any[] = []
+  let contextChunks: any[] = []
   let recallStrategy = 'vector'
 
+  // Strategy 1: graph-aware recall
   try {
-    const graphRecall = await (hydra as any).recall({
+    const res = await hydra.recall.fullRecall({
+      tenant_id: 'default',
       query: question,
-      limit: 8,
-      graph_context: true,   // uses graph relationships not just vector similarity
+      max_results: 8,
+      graph_context: true,
     })
-    
-    if (graphRecall?.results?.length > 0) {
-      contextPages = graphRecall.results
+    if (res?.chunks && res.chunks.length > 0) {
+      contextChunks = res.chunks
       recallStrategy = 'graph_context'
     }
   } catch {
-    // Graph recall failed, fall back to vector
+    // fall through to vector
   }
 
-  // Strategy 2: Fall back to pure vector if graph returned nothing
-  if (contextPages.length === 0) {
+  // Strategy 2: pure vector recall
+  if (contextChunks.length === 0) {
     try {
-      const vectorRecall = await (hydra as any).recall({
+      const res = await hydra.recall.fullRecall({
+        tenant_id: 'default',
         query: question,
-        limit: 6,
+        max_results: 6,
       })
-      contextPages = vectorRecall?.results || []
+      contextChunks = res?.chunks ?? []
       recallStrategy = 'vector_fallback'
     } catch {
-      // Both failed — fall back to SQLite keyword search
-      const { getAllPages } = await import('@/lib/db-helpers')
-      const allPages = getAllPages()
-      const words = question.toLowerCase().split(' ').filter((w: string) => w.length > 3)
-      contextPages = allPages
-        .filter((p: any) => words.some((w: string) => 
-          p.title?.toLowerCase().includes(w) || 
-          p.summary?.toLowerCase().includes(w)
-        ))
-        .slice(0, 6)
-        .map((p: any) => ({ content: p.content, metadata: p }))
-      recallStrategy = 'sqlite_fallback'
+      // fall through to SQLite
     }
   }
 
-  // Log the query for observability
-  db.prepare(`
-    INSERT INTO query_logs 
-    (question, pages_considered, pages_used, recall_strategy)
-    VALUES (?, ?, ?, ?)
-  `).run(question, contextPages.length, contextPages.length, recallStrategy)
+  // Strategy 3: SQLite keyword search
+  if (contextChunks.length === 0) {
+    const { getAllPages } = await import('@/lib/db-helpers')
+    const allPages = getAllPages()
+    const words = question.toLowerCase().split(' ').filter((w: string) => w.length > 3)
+    contextChunks = allPages
+      .filter((p: any) => words.some((w: string) =>
+        p.title?.toLowerCase().includes(w) ||
+        p.summary?.toLowerCase().includes(w)
+      ))
+      .slice(0, 6)
+      .map((p: any) => ({ chunk_content: p.content, source_title: p.title }))
+    recallStrategy = 'sqlite_fallback'
+  }
 
-  if (contextPages.length === 0) {
+  db.prepare(`
+    INSERT INTO query_logs (question, pages_considered, pages_used, recall_strategy)
+    VALUES (?, ?, ?, ?)
+  `).run(question, contextChunks.length, contextChunks.length, recallStrategy)
+
+  if (contextChunks.length === 0) {
     return Response.json({
       error: 'No relevant pages found in wiki. Add more sources first.',
       strategy: recallStrategy
     }, { status: 404 })
   }
 
-  const context = contextPages
-    .map((r: { content?: string; metadata?: { title?: string } }, i: number) => 
-      `[Page ${i + 1}${r.metadata?.title ? ` — ${r.metadata.title}` : ''}]:\n${r.content || ''}`
+  const context = contextChunks
+    .map((c: any, i: number) =>
+      `[Page ${i + 1}${c.source_title ? ` — ${c.source_title}` : ''}]:\n${c.chunk_content || c.content || ''}`
     )
     .join('\n\n---\n\n')
 
@@ -78,10 +81,10 @@ If the answer is not in the wiki, say "This isn't covered in the wiki yet. Try a
 Keep answers concise and factual.`
 
   const stream = streamText({
-    model: google('gemini-2.0-flash'),
+    model: google('gemini-2.5-flash'),
     system: systemPrompt,
     prompt: `Question: ${question}\n\nWiki context:\n${context}`,
-    maxTokens: 600,
+    maxOutputTokens: 600,
   })
 
   return stream.toTextStreamResponse()

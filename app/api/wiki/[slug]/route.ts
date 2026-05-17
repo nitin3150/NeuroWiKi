@@ -46,11 +46,8 @@ export async function GET(
     const page = {
       slug: (pageSource.additional_metadata?.slug as string) || pageSource.id,
       title: pageSource.title ?? 'Unknown Title',
-      type:
-        (pageSource.additional_metadata?.type as string) ||
-        (pageSource.metadata?.category as string) ||
-        'concept',
-      summary: (pageSource.metadata?.summary as string) || '',
+      type: (pageSource.additional_metadata?.category as string) || 'concept',
+      summary: (pageSource.additional_metadata?.summary as string) || '',
       content: pageSource.description ?? '',
       created_at: pageSource.timestamp ?? '',
     }
@@ -71,11 +68,8 @@ export async function GET(
       .map((s: any) => ({
         slug: (s.additional_metadata?.slug as string) || s.id,
         title: s.title ?? 'Unknown',
-        summary: (s.metadata?.summary as string) || '',
-        type:
-          (s.additional_metadata?.type as string) ||
-          (s.metadata?.category as string) ||
-          'concept',
+        summary: (s.additional_metadata?.summary as string) || '',
+        type: (s.additional_metadata?.category as string) || 'concept',
       }))
 
     return NextResponse.json({ page, relatedPages })

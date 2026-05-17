@@ -1,7 +1,7 @@
-import { generateObject } from 'ai'
+import { generateObject, NoObjectGeneratedError } from 'ai'
 import { google } from '@ai-sdk/google'
 import { z } from 'zod'
-import { hydra, waitForIngestion } from '../hydra'
+import { hydra, ensureTenant, waitForIngestion } from '../hydra'
 import { upsertPageHealth } from '../db-helpers'
 
 export interface IngestResult {
@@ -9,17 +9,10 @@ export interface IngestResult {
   pages: Array<{ slug: string; title: string; content: string; isNew: boolean; indexed: boolean }>
 }
 
-/**
- * Takes raw source text and:
- * 1. Uses Gemini to generate wiki pages (structured JSON)
- * 2. Stores each page in HydraDB as a Knowledge document
- * 3. HydraDB automatically builds the context graph
- */
 async function verifyClaims(
   page: { content: string; sourceSentences: string[] },
   sourceText: string
 ): Promise<boolean> {
-  // Check each source sentence actually exists in the source
   for (const sentence of page.sourceSentences) {
     const words = sentence.toLowerCase().split(' ').filter(w => w.length > 4)
     if (words.length === 0) continue
@@ -36,8 +29,11 @@ async function verifyClaims(
 export async function runIngestAgent(
   sourceText: string,
   sourceId: number,
-  tenantId: string = 'default_tenant'
+  tenantId: string = 'default'
 ): Promise<IngestResult> {
+  // Ensure tenant exists before any operations
+  await ensureTenant(tenantId)
+
   // Step 1: Fetch existing pages for the prompt
   let existingPages: any[] = []
   try {
@@ -47,19 +43,21 @@ export async function runIngestAgent(
       page: 1,
       page_size: 100,
     })) as any
-    const items: any[] = res?.results ?? res?.data ?? res?.items ?? []
+    const items: any[] = res?.sources ?? []
     existingPages = items.map((item: any) => ({
-      slug: (item.additional_metadata?.slug as string) || item.id,
+      slug: (item.document_metadata?.slug as string) || item.id,
       title: item.title || '',
-      summary: (item.metadata?.summary as string) || '',
+      summary: (item.document_metadata?.summary as string) || '',
     }))
-  } catch (e) {
-    console.warn("Failed to fetch existing pages for prompt index", e)
+  } catch (e: any) {
+    const is404 = e?.statusCode === 404 || e?.body?.detail?.error_code === 'NOT_FOUND'
+    if (!is404) console.warn("Failed to fetch existing pages for prompt index", e)
   }
 
   // Step 2 — Generate pages with Gemini
   const result = await generateObject({
-    model: google('gemini-1.5-pro'),
+    model: google('gemini-2.5-flash'),
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     schema: z.object({
       pages: z.array(
         z.object({
@@ -97,9 +95,15 @@ Return a JSON array of pages. Each page must include:
 - type: concept | person | place | event | tool | organization
 - summary: one sentence from the source
 - content: 150-300 word markdown — only facts from the source
-- sourceSentences: array of 2-5 exact quotes (under 20 words each) 
+- sourceSentences: array of 2-5 exact quotes (under 20 words each)
   from the source text that back up the main claims in this page
 `,
+  }).catch((err: unknown) => {
+    if (NoObjectGeneratedError.isInstance(err)) {
+      console.error('[ingest] Raw Gemini response:', (err as any).text)
+      console.error('[ingest] Cause:', (err as any).cause?.message)
+    }
+    throw err
   })
 
   const pages: Array<{ slug: string; title: string; content: string; isNew: boolean; indexed: boolean }> = []
@@ -113,72 +117,58 @@ Return a JSON array of pages. Each page must include:
         console.warn(`Skipping page ${page.slug} — claims could not be verified against source`)
         continue
       }
-      // NOTE: Using the official @hydradb/sdk signature 'upload.knowledge()' and mapping your
-      // 'hydra.knowledge.add()' metadata intention into the correct 'app_knowledge' payload structure.
-      await hydra.upload.knowledge({
+
+      const uploadResponse = await hydra.upload.knowledge({
         tenant_id: tenantId,
+        upsert: true,
         app_knowledge: JSON.stringify([
           {
             tenant_id: tenantId,
             sub_tenant_id: 'default',
             id: page.slug,
             title: page.title,
-            type: 'webpage', // Maps to valid HydraDB ingestion type
+            type: 'document',
             content: {
-              text: `# ${page.title}\n\n${page.content}`,
+              markdown: `# ${page.title}\n\n${page.content}`,
             },
-            metadata: {
-              category: page.type, // Map our wiki type to HydraDB metadata
+            document_metadata: {
+              category: page.type,
               summary: page.summary,
               sourceSentences: page.sourceSentences,
               verified: true,
               verifiedAt: new Date().toISOString(),
-            },
-            additional_metadata: {
               sourceId: sourceId.toString(),
-              type: page.type,
               slug: page.slug,
             },
           },
         ]),
-      })
+      }) as any
 
-      const ready = await waitForIngestion(page.slug, tenantId)
-      if (!ready) {
-        console.warn(`Page ${page.slug} may have incomplete graph links — ingested but not fully indexed`)
-        upsertPageHealth({
-          slug: page.slug,
-          title: page.title,
-          type: page.type,
-          confidence: 60,
-          stale_reason: 'Indexing may be incomplete',
-          hydra_doc_id: page.slug
-        })
-      } else {
-        upsertPageHealth({
-          slug: page.slug,
-          title: page.title,
-          type: page.type,
-          hydra_doc_id: page.slug
-        })
-      }
+      // Use real source_id from upload response for status polling
+      const realSourceId = uploadResponse?.results?.[0]?.source_id ?? page.slug
+      const ready = await waitForIngestion(realSourceId, tenantId)
+
+      upsertPageHealth({
+        slug: page.slug,
+        title: page.title,
+        type: page.type,
+        confidence: ready ? 100 : 60,
+        stale_reason: ready ? undefined : 'Indexing may be incomplete',
+        hydra_doc_id: realSourceId,
+      })
 
       pages.push({
         slug: page.slug,
         title: page.title,
         content: page.content,
-        isNew: true, // Assuming creation succeeds if it doesn't throw
+        isNew: true,
         indexed: ready,
       })
       pagesCreated++
-    } catch (error) {
-      console.error(`Failed to ingest generated page ${page.slug} to HydraDB:`, error)
+    } catch (error: any) {
+      console.error(`Failed to ingest page ${page.slug}:`, error?.body ?? error?.message)
     }
   }
 
-  // Step 3 — Return result
-  return {
-    pagesCreated,
-    pages,
-  }
+  return { pagesCreated, pages }
 }

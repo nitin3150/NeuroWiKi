@@ -21,16 +21,13 @@ export async function GET() {
       }
     }
 
-    const items: any[] = listResponse?.results ?? listResponse?.data ?? listResponse?.items ?? []
+    const items: any[] = listResponse?.sources ?? []
 
     const nodes = items.map((item: any) => ({
-      id: (item.additional_metadata?.slug as string) || (item.id as string),
-      slug: (item.additional_metadata?.slug as string) || (item.id as string),
+      id: (item.document_metadata?.slug as string) || (item.id as string),
+      slug: (item.document_metadata?.slug as string) || (item.id as string),
       title: (item.title as string) ?? '',
-      type:
-        (item.additional_metadata?.type as string) ||
-        (item.metadata?.category as string) ||
-        'concept',
+      type: (item.document_metadata?.category as string) || 'concept',
     }))
 
     // 2. Build edges from the context graph

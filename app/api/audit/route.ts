@@ -28,8 +28,9 @@ export async function GET(req: NextRequest) {
     } else if (hydraCount < all.length) {
       syncWarning = `Database drift detected: SQLite index contains ${all.length} pages but HydraDB only has ${hydraCount}.`
     }
-  } catch (e) {
-    console.error('Failed to reconcile with HydraDB', e)
+  } catch (e: any) {
+    const is404 = e?.statusCode === 404 || e?.body?.detail?.error_code === 'NOT_FOUND'
+    if (!is404) console.error('Failed to reconcile with HydraDB', e)
   }
   
   return Response.json({

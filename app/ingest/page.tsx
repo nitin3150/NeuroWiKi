@@ -26,6 +26,7 @@ export default function IngestPage() {
   const [results, setResults] = useState<ResultPage[]>([])
   const [done, setDone] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const advanceStep = (index: number) => {
     setSteps(prev => prev.map((s, i) => ({
@@ -59,9 +60,28 @@ export default function IngestPage() {
       
       const textResponse = await res.text()
       const lines = textResponse.split('\n').filter(Boolean)
-      const finalLine = lines[lines.length - 1]
-      const data = JSON.parse(finalLine)
-      
+
+      // Find the final JSON payload (last parseable line with `final` or `error`)
+      let data: any = null
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const parsed = JSON.parse(lines[i])
+          if (parsed.final || parsed.error) { data = parsed; break }
+        } catch { /* non-JSON status line, skip */ }
+      }
+
+      if (!data) {
+        setError('Ingest failed: no response from server')
+        setLoading(false)
+        return
+      }
+
+      if (data.error) {
+        setError(`Ingest failed: ${data.error}`)
+        setLoading(false)
+        return
+      }
+
       setTimeout(() => {
         setSteps(prev => prev.map(s => ({ ...s, status: 'done' })))
         setResults(data.pages || [])
@@ -69,8 +89,8 @@ export default function IngestPage() {
         setDone(true)
         setLoading(false)
       }, 600)
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      setError(`Ingest failed: ${e?.message || 'Unknown error'}`)
       setLoading(false)
     }
   }
@@ -166,6 +186,14 @@ export default function IngestPage() {
             </div>
           )}
         </FadeUp>
+
+        {/* Error */}
+        {error && (
+          <div className="mt-6 bg-red-950/30 border border-red-900/50 rounded-xl p-3 flex items-start gap-3">
+            <span className="text-red-500 text-xs mt-0.5">✗</span>
+            <p className="text-[11px] text-red-200/80 leading-relaxed font-mono">{error}</p>
+          </div>
+        )}
 
         {/* Results */}
         {done && results.length > 0 && (

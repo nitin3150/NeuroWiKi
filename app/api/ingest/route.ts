@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
             page: 1,
             page_size: 100,
           })) as any
-          const items: any[] = res?.results ?? res?.data ?? res?.items ?? []
-          allExistingSlugs = items.map((item: any) => (item.additional_metadata?.slug as string) || item.id)
+          const items: any[] = res?.sources ?? []
+          allExistingSlugs = items.map((item: any) => (item.document_metadata?.slug as string) || item.id)
         } catch (e) {
           console.warn("Failed to fetch all slugs for consistency check", e)
         }
