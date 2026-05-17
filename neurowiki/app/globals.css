@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&family=Instrument+Serif:ital@1&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -46,6 +48,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --font-serif: "Instrument Serif", serif;
 }
 
 :root {
@@ -55,7 +58,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: #DEDBC8;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -90,7 +93,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
+  --primary: #DEDBC8;
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -128,3 +131,29 @@
     @apply font-sans;
   }
 }
+
+* { font-family: 'Almarai', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+.font-serif-italic {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+}
+
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+.wiki-prose h2 { font-size: 1.25rem; font-weight: 700; color: #E1E0CC; margin: 1.5rem 0 0.5rem; border-left: 2px solid rgba(222,219,200,0.2); padding-left: 0.75rem; }
+.wiki-prose h3 { font-size: 1rem; font-weight: 700; color: #DEDBC8; margin: 1rem 0 0.5rem; }
+.wiki-prose p { color: rgba(222,219,200,0.7); line-height: 1.8; margin-bottom: 1rem; font-size: 0.9rem; }
+.wiki-prose a { color: #DEDBC8; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(222,219,200,0.3); }
+.wiki-prose a:hover { text-decoration-color: rgba(222,219,200,0.8); }
+.wiki-prose code { background: #111; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; color: #DEDBC8; }
