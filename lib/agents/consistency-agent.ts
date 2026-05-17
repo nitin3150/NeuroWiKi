@@ -47,10 +47,14 @@ async function upsertPage(page: any) {
       sub_tenant_id: 'default',
       id: page.slug,
       title: page.title,
-      type: 'webpage',
-      content: { text: page.content },
-      metadata: page.originalMetadata || {},
-      additional_metadata: page.originalAdditionalMetadata || {},
+      type: 'document',
+      content: { markdown: page.content },
+      document_metadata: {
+        category: page.type,
+        summary: page.summary,
+        slug: page.slug,
+        updated_at: page.updated_at,
+      },
     }])
   })
 }
