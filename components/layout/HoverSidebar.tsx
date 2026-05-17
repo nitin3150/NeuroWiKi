@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain, BookOpen, Plus, Search,
-  Network, ShieldCheck, Github, User, X
+  Network, ShieldCheck, User, X
 } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 
@@ -223,7 +223,6 @@ export function HoverSidebar() {
                                transition-opacity hover:opacity-100"
                     style={{ color: 'rgba(222,219,200,0.5)' }}
                   >
-                    <Github size={12} />
                     github.com/YOUR_USERNAME/neurowiki
                   </a>
                 </div>
