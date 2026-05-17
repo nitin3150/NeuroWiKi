@@ -1,103 +1,147 @@
-import Image from "next/image";
+'use client'
+import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
+import { WordsPullUp } from '@/components/animations/WordsPullUp'
+import { FadeUp } from '@/components/animations/FadeUp'
+import { TypeBadge } from '@/components/TypeBadge'
+import { useEffect, useState } from 'react'
 
-export default function Home() {
+interface Page {
+  slug: string
+  title: string
+  summary: string
+  type: string
+  updated_at: string
+}
+
+export default function HomePage() {
+  const [pages, setPages] = useState<Page[]>([])
+  const [stats, setStats] = useState({ pages: 0, sources: 0 })
+
+  useEffect(() => {
+    fetch('/api/wiki').then(r => r.json()).then(data => {
+      const fetchedPages = data.pages || []
+      setPages(fetchedPages.slice(0, 6))
+      setStats({ pages: fetchedPages.length, sources: 0 })
+    }).catch(() => {})
+  }, [])
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="bg-black min-h-screen">
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* HERO */}
+      <section className="h-screen p-4 md:p-6">
+        <div className="relative w-full h-full rounded-2xl md:rounded-[2rem] overflow-hidden bg-black">
+
+          {/* Background gradient */}
+          <div className="absolute inset-0" style={{
+            background: 'radial-gradient(ellipse at 20% 50%, rgba(120,80,255,0.07) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(200,180,120,0.05) 0%, transparent 60%), #000'
+          }} />
+
+          {/* Noise overlay */}
+          <div className="noise-overlay absolute inset-0 opacity-[0.5] mix-blend-overlay pointer-events-none" />
+
+          {/* Gradient fade bottom */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 pointer-events-none" />
+
+          {/* Top nav pill */}
+          <nav className="absolute top-0 left-1/2 -translate-x-1/2 z-10">
+            <div className="bg-black rounded-b-2xl px-6 py-2.5 flex items-center gap-8">
+              {['Browse', 'Add Source', 'Search', 'Graph'].map(item => (
+                <Link
+                  key={item}
+                  href={item === 'Browse' ? '/wiki' : item === 'Add Source' ? '/ingest' : item === 'Search' ? '/search' : '/graph'}
+                  className="text-[10px] sm:text-xs tracking-wider uppercase transition-all duration-200"
+                  style={{ color: 'rgba(225,224,204,0.6)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#E1E0CC')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(225,224,204,0.6)')}
+                >
+                  {item}
+                </Link>
+              ))}
+            </div>
+          </nav>
+
+          {/* Hero content — bottom aligned */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
+            <div className="grid grid-cols-12 items-end gap-4">
+
+              {/* Giant heading */}
+              <div className="col-span-12 lg:col-span-8">
+                <h1 className="font-medium leading-[0.85] tracking-[-0.07em]"
+                  style={{ fontSize: 'clamp(5rem, 18vw, 16rem)', color: '#E1E0CC' }}>
+                  <WordsPullUp text="NeuroWiki" />
+                </h1>
+              </div>
+
+              {/* Right side */}
+              <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 pb-2">
+                <FadeUp delay={0.5}>
+                  <p className="text-xs sm:text-sm leading-[1.3]" style={{ color: 'rgba(222,219,200,0.6)' }}>
+                    Your ideas. Your sources. One living, breathing, AI-built encyclopedia.
+                  </p>
+                </FadeUp>
+
+                <FadeUp delay={0.6}>
+                  <p className="text-[10px] tracking-wider" style={{ color: 'rgba(222,219,200,0.35)' }}>
+                    {stats.pages} pages · AI-powered
+                  </p>
+                </FadeUp>
+
+                <FadeUp delay={0.7}>
+                  <Link href="/ingest"
+                    className="group inline-flex items-center gap-2 bg-[#DEDBC8] rounded-full px-4 py-2.5 w-fit transition-all duration-300 hover:gap-3">
+                    <span className="text-black font-medium text-sm">Start building</span>
+                    <div className="bg-black rounded-full w-8 h-8 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+                      <ArrowRight size={14} color="#DEDBC8" />
+                    </div>
+                  </Link>
+                </FadeUp>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </section>
+
+      {/* RECENT PAGES */}
+      <section className="py-20 px-8">
+        <FadeUp>
+          <p className="text-[10px] tracking-[0.3em] uppercase mb-8" style={{ color: 'rgba(222,219,200,0.3)' }}>
+            Recently Added
+          </p>
+        </FadeUp>
+
+        {pages.length === 0 ? (
+          <FadeUp delay={0.2}>
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="text-6xl font-bold mb-4" style={{ color: 'rgba(255,255,255,0.04)' }}>0</p>
+              <p className="text-sm mb-2" style={{ color: 'rgba(222,219,200,0.4)' }}>Your wiki is empty.</p>
+              <p className="text-xs mb-6" style={{ color: 'rgba(222,219,200,0.25)' }}>Add a source to begin building your knowledge base.</p>
+              <Link href="/ingest"
+                className="bg-[#DEDBC8] text-black text-xs font-medium px-5 py-2.5 rounded-full hover:opacity-90 transition">
+                Add your first source →
+              </Link>
+            </div>
+          </FadeUp>
+        ) : (
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {pages.map((page, i) => (
+              <Link key={page.slug} href={`/wiki/${page.slug}`} style={{ animationDelay: `${i * 0.08}s` }}>
+                <div className="w-64 flex-shrink-0 bg-[#101010] rounded-2xl p-5 border border-transparent hover:border-white/10 transition-all duration-300 cursor-pointer">
+                  <TypeBadge type={page.type} />
+                  <h3 className="text-base font-medium mt-3 mb-1" style={{ color: '#E1E0CC' }}>{page.title}</h3>
+                  <p className="text-[11px] leading-relaxed line-clamp-3" style={{ color: 'rgba(222,219,200,0.45)' }}>
+                    {page.summary}
+                  </p>
+                  <p className="text-[9px] mt-4" style={{ color: 'rgba(222,219,200,0.25)' }}>
+                    {new Date(page.updated_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
-  );
+  )
 }
