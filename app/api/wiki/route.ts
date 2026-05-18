@@ -28,7 +28,7 @@ export async function GET() {
       title: (item.title as string) || '',
       type: (item.document_metadata?.category as string) || 'concept',
       summary: (item.document_metadata?.summary as string) || '',
-      created_at: (item.timestamp as string) || '',
+      updated_at: (item.document_metadata?.verifiedAt as string) || (item.timestamp as string) || '',
     }))
 
     return NextResponse.json({ pages })

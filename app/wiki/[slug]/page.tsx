@@ -2,7 +2,6 @@ import { WikiRenderer } from '@/components/WikiRenderer'
 import { TypeBadge } from '@/components/TypeBadge'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 
 async function getPage(slug: string) {
   try {
@@ -26,11 +25,7 @@ export default async function WikiPage({ params }: { params: Promise<{ slug: str
   return (
     <div className="bg-black min-h-screen">
       {/* Hero bar */}
-      <div className="py-12 px-8 md:px-16 border-b border-white/5">
-        <Link href="/wiki" className="inline-flex items-center gap-2 text-[10px] tracking-wider uppercase mb-6 transition-opacity hover:opacity-100"
-          style={{ color: 'rgba(222,219,200,0.4)' }}>
-          <ArrowLeft size={12} /> All Pages
-        </Link>
+      <div className="pt-24 pb-12 px-8 md:px-16 border-b border-white/5">
         <div className="mb-3">
           <TypeBadge type={page.type} />
         </div>
@@ -114,7 +109,7 @@ export default async function WikiPage({ params }: { params: Promise<{ slug: str
               Last Updated
             </p>
             <p className="text-[11px]" style={{ color: 'rgba(222,219,200,0.4)' }}>
-              {page.created_at ? new Date(page.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
+              {(() => { const d = new Date(page.created_at); return page.created_at && !isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—' })()}
             </p>
           </div>
         </div>

@@ -40,7 +40,7 @@ function PageCard({ page, index }: { page: Page; index: number }) {
           </p>
           <div className="mt-auto pt-3 border-t border-white/5 flex items-center justify-between">
             <span className="text-[9px]" style={{ color: 'rgba(222,219,200,0.3)' }}>
-              {new Date(page.updated_at).toLocaleDateString()}
+              {(() => { const d = new Date(page.updated_at); return page.updated_at && !isNaN(d.getTime()) ? d.toLocaleDateString() : '—' })()}
             </span>
             <span className="text-[11px]" style={{ color: 'rgba(222,219,200,0.3)' }}>→</span>
           </div>
