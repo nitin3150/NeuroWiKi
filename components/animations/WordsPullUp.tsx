@@ -21,7 +21,7 @@ export function WordsPullUp({ text, className = '', style = {}, delay = 0 }: Pro
       style={style}
     >
       {words.map((word, i) => (
-        <span key={i} style={{ overflow: 'hidden', display: 'inline-block' }}>
+        <span key={i} style={{ overflow: 'hidden', display: 'inline-block', paddingBottom: '0.15em', marginBottom: '-0.15em' }}>
           <motion.span
             initial={{ y: 30, opacity: 0 }}
             animate={isInView ? { y: 0, opacity: 1 } : { y: 30, opacity: 0 }}

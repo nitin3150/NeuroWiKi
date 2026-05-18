@@ -6,7 +6,7 @@ import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
-import { Download } from 'lucide-react'
+import { ArrowRight, Download } from 'lucide-react'
 
 const TYPES = ['All', 'concept', 'person', 'place', 'event', 'tool', 'organization']
 
@@ -130,7 +130,27 @@ export default function WikiBrowserPage() {
             ))
           : filtered.length === 0
           ? <div className="col-span-full text-center py-20 flex flex-col items-center justify-center h-64">
-              <p className="text-sm" style={{ color: 'rgba(222,219,200,0.3)' }}>No pages found.</p>
+              {pages.length === 0 ? (
+                <>
+                  <p className="text-sm mb-1" style={{ color: 'rgba(222,219,200,0.35)' }}>
+                    Wiki is empty.
+                  </p>
+                  <p className="text-xs mb-6" style={{ color: 'rgba(222,219,200,0.2)' }}>
+                    Feed it a source to get started.
+                  </p>
+                  <Link
+                    href="/ingest"
+                    className="group inline-flex items-center gap-2 bg-[#DEDBC8] rounded-full pl-4 pr-1 py-1 hover:opacity-90 transition-opacity"
+                  >
+                    <span className="text-black font-medium text-sm">Feed the wiki</span>
+                    <div className="bg-black rounded-full w-8 h-8 flex items-center justify-center transition-transform group-hover:scale-110">
+                      <ArrowRight size={13} color="#DEDBC8" />
+                    </div>
+                  </Link>
+                </>
+              ) : (
+                <p className="text-sm" style={{ color: 'rgba(222,219,200,0.3)' }}>No pages match.</p>
+              )}
             </div>
           : filtered.map((page, i) => <PageCard key={page.slug} page={page} index={i} />)
         }
