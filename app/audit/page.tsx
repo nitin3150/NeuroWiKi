@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { Loader2, Wrench, Zap } from 'lucide-react'
@@ -39,6 +39,7 @@ export default function AuditPage() {
   const [repairError, setRepairError] = useState<string | null>(null)
   const [driftLoading, setDriftLoading] = useState(true)
   const [syncWarning, setSyncWarning] = useState<string | null>(null)
+  const statsRef = useRef<HTMLDivElement>(null)
 
   const runRepair = async () => {
     setRepairing(true)
@@ -49,6 +50,7 @@ export default function AuditPage() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setRepairResult({ repaired: data.repaired, total: data.total })
+      setTimeout(() => statsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
       // Refresh stats and re-check drift
       fetch('/api/audit?skipDrift=1').then(r => r.json()).then(setAudit)
       setDriftLoading(true)
@@ -161,7 +163,7 @@ export default function AuditPage() {
           </FadeUp>
 
           {/* Health score */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-12">
+          <div ref={statsRef} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-12">
             {[
               { label: 'Total Pages', value: audit.totalPages },
               { label: 'Health Score', value: `${audit.healthScore}%` },

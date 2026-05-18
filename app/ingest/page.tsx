@@ -1,11 +1,21 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
 import Link from 'next/link'
 import { ArrowRight, Check, Circle, Loader2, Paperclip, X } from 'lucide-react'
+
+type LogEntry = {
+  id: number
+  pages_created: number
+  pages_updated: number
+  message: string | null
+  created_at: string
+  source_title: string | null
+  source_url: string | null
+}
 
 type Step = { label: string; status: 'pending' | 'active' | 'done' }
 type ResultPage = { slug: string; title: string; type: string; isNew: boolean }
@@ -33,7 +43,12 @@ export default function IngestPage() {
   const [warning, setWarning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retryAfter, setRetryAfter] = useState<number | null>(null)
+  const [history, setHistory] = useState<LogEntry[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetch('/api/logs?limit=10').then(r => r.json()).then(d => setHistory(d.logs || []))
+  }, [])
 
   const advanceStep = (index: number) => {
     setSteps(prev => prev.map((s, i) => ({
@@ -169,6 +184,7 @@ export default function IngestPage() {
         setDone(true)
         setLoading(false)
         setFiles([])
+        fetch('/api/logs?limit=10').then(r => r.json()).then(d => setHistory(d.logs || []))
       }, 600)
     } catch (e: any) {
       const msg = e?.message || 'Unknown error'
@@ -441,6 +457,35 @@ export default function IngestPage() {
                 + Add another source
               </button>
             </FadeUp>
+          </div>
+        )}
+        {/* Ingest history */}
+        {history.length > 0 && (
+          <div className="mt-16 border-t pt-10" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <p className="text-[9px] tracking-[0.3em] uppercase mb-5" style={{ color: 'rgba(222,219,200,0.3)' }}>
+              Recent Ingestions
+            </p>
+            <div className="space-y-2">
+              {history.map(log => (
+                <div key={log.id} className="flex items-start gap-3 px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.025)' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] truncate" style={{ color: '#DEDBC8' }}>
+                      {log.source_title || log.source_url || 'Manual text'}
+                    </p>
+                    <p className="text-[10px] mt-0.5" style={{ color: 'rgba(222,219,200,0.35)' }}>
+                      {log.pages_created > 0 && `${log.pages_created} created`}
+                      {log.pages_created > 0 && log.pages_updated > 0 && ' · '}
+                      {log.pages_updated > 0 && `${log.pages_updated} updated`}
+                      {log.pages_created === 0 && log.pages_updated === 0 && 'No pages'}
+                    </p>
+                  </div>
+                  <span className="text-[9px] shrink-0" style={{ color: 'rgba(222,219,200,0.2)' }}>
+                    {new Date(log.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
