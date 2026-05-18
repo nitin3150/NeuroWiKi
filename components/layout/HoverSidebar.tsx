@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain, BookOpen, Plus, Search,
-  Network, ShieldCheck, User, X
+  Network, ShieldCheck, User, X, Database
 } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 
@@ -12,6 +12,7 @@ const navItems = [
   { label: 'Home', href: '/', icon: Brain },
   { label: 'Browse Wiki', href: '/wiki', icon: BookOpen },
   { label: 'Add Source', href: '/ingest', icon: Plus },
+  { label: 'Source Manager', href: '/sources', icon: Database },
   { label: 'Search & Ask', href: '/search', icon: Search },
   { label: 'Knowledge Graph', href: '/graph', icon: Network },
   { label: 'Wiki Health', href: '/audit', icon: ShieldCheck },
