@@ -10,8 +10,10 @@
 
 import Database from 'better-sqlite3'
 import path from 'path'
+import fs from 'fs'
 
-const DB_PATH = path.join(process.cwd(), 'data', 'wiki.db')
+const DATA_DIR = path.join(process.cwd(), 'data')
+const DB_PATH = path.join(DATA_DIR, 'wiki.db')
 
 // ---------------------------------------------------------------------------
 // Singleton plumbing
@@ -23,6 +25,8 @@ declare global {
 }
 
 function openDatabase(): Database.Database {
+  // Ensure the data directory exists (may be missing in fresh deploys or after git clean)
+  fs.mkdirSync(DATA_DIR, { recursive: true })
   const db = new Database(DB_PATH)
 
   // WAL mode for better concurrent read performance
