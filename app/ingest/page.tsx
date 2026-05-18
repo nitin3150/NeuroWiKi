@@ -60,6 +60,14 @@ export default function IngestPage() {
     if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
   }, [])
 
+  const messageToStep = (msg: string): number | null => {
+    const m = msg.toLowerCase()
+    if (m.includes('ai is analyzing') || m.includes('analyzing')) return 1
+    if (m.includes('processing') || m.includes('storing logs') || m.includes('writing')) return 2
+    if (m.includes('checking') || m.includes('consistency')) return 3
+    return null
+  }
+
   const handleSubmit = async () => {
     if (!files.length && !input.trim()) return
 
@@ -73,9 +81,6 @@ export default function IngestPage() {
     toast.loading('Processing source...', { id: 'ingest' })
 
     try {
-      setTimeout(() => advanceStep(1), 800)
-      setTimeout(() => advanceStep(2), 1800)
-
       let res: Response
 
       if (files.length > 0) {
@@ -98,18 +103,38 @@ export default function IngestPage() {
         })
       }
 
-      advanceStep(3)
-      setTimeout(() => advanceStep(4), 1000)
-
-      const textResponse = await res.text()
-      const lines = textResponse.split('\n').filter(Boolean)
-
+      // Read stream incrementally — advance steps on real API messages
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
       let data: any = null
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const parsed = JSON.parse(lines[i])
-          if (parsed.final || parsed.error) { data = parsed; break }
-        } catch { /* skip */ }
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split('\n')
+          buffer = parts.pop() ?? ''
+
+          for (const line of parts) {
+            if (!line.trim()) continue
+            try {
+              const parsed = JSON.parse(line)
+              if (parsed.final || parsed.error) data = parsed
+            } catch {
+              const step = messageToStep(line)
+              if (step !== null) advanceStep(step)
+            }
+          }
+        }
+        // flush remaining buffer
+        if (buffer.trim()) {
+          try {
+            const parsed = JSON.parse(buffer)
+            if (parsed.final || parsed.error) data = parsed
+          } catch {}
+        }
       }
 
       if (!data) {
@@ -130,6 +155,8 @@ export default function IngestPage() {
         return
       }
 
+      // Show step 4 briefly before marking all done
+      advanceStep(4)
       setTimeout(() => {
         setSteps(prev => prev.map(s => ({ ...s, status: 'done' })))
         setResults(data.pages || [])

@@ -113,7 +113,7 @@ export async function absorbIntoExisting(
     : '(no slugs available — do not add wikilinks)'
 
   const { object } = await withGeminiRetry(() => generateObject({
-    model: google('gemini-2.0-flash-exp'),
+    model: google('gemini-2.0-flash'),
     providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     schema: MergeSchema,
     prompt: `You are an expert wiki editor updating an existing knowledge base page with new information.
