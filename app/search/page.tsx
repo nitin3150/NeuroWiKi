@@ -25,7 +25,7 @@ export default function SearchPage() {
     if (mode === 'search' && query.trim()) {
       const q = query.toLowerCase()
       setFiltered(pages.filter(p =>
-        p.title.toLowerCase().includes(q) || p.summary?.toLowerCase().includes(q)
+        p.title?.toLowerCase().includes(q) || p.summary?.toLowerCase().includes(q)
       ))
     } else {
       setFiltered([])
@@ -42,6 +42,13 @@ export default function SearchPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: query }),
     })
+
+    if (!res.ok) {
+      const err = await res.json()
+      setAnswer(err.error || 'Something went wrong.')
+      setLoading(false)
+      return
+    }
 
     const reader = res.body?.getReader()
     const decoder = new TextDecoder()
@@ -74,9 +81,8 @@ export default function SearchPage() {
               <button
                 key={m}
                 onClick={() => { setMode(m); setAnswer(''); inputRef.current?.focus() }}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200 ${
-                  mode === m ? 'bg-[#DEDBC8] text-black' : ''
-                }`}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200 ${mode === m ? 'bg-[#DEDBC8] text-black' : ''
+                  }`}
                 style={{ color: mode === m ? '#000' : 'rgba(222,219,200,0.4)' }}
               >
                 {m === 'search' ? <Search size={11} /> : <Sparkles size={11} />}
@@ -144,7 +150,7 @@ export default function SearchPage() {
               </p>
               {loading && !answer && (
                 <div className="flex gap-1">
-                  {[0,1,2].map(i => (
+                  {[0, 1, 2].map(i => (
                     <span key={i} className="w-1.5 h-1.5 rounded-full bg-[#DEDBC8] animate-bounce"
                       style={{ animationDelay: `${i * 0.15}s`, opacity: 0.6 }} />
                   ))}
