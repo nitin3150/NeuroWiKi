@@ -263,6 +263,31 @@ export function getAllPageLinks(): Array<{ source_slug: string; target_slug: str
   return db.prepare(`SELECT source_slug, target_slug FROM page_links`).all() as any[]
 }
 
+// ---------------------------------------------------------------------------
+// Lint Sweeps
+// ---------------------------------------------------------------------------
+
+export function getLastLintTime(): string | null {
+  const row = db.prepare(
+    `SELECT ran_at FROM lint_sweeps ORDER BY ran_at DESC LIMIT 1`
+  ).get() as { ran_at: string } | undefined
+  return row?.ran_at ?? null
+}
+
+export function recordLintSweep(pagesAnalyzed: number, issuesFound: number): void {
+  db.prepare(
+    `INSERT INTO lint_sweeps (pages_analyzed, issues_found) VALUES (?, ?)`
+  ).run(pagesAnalyzed, issuesFound)
+}
+
+export function getPagesUpdatedSince(since: string): PageHealth[] {
+  return db.prepare<[string], PageHealth>(
+    `SELECT * FROM pages WHERE updated_at > ? ORDER BY updated_at DESC`
+  ).all(since)
+}
+
+// ---------------------------------------------------------------------------
+
 export function archivePage(slug: string): void {
   db.prepare<[string]>(`UPDATE pages SET is_stale = 1, confidence = 0, updated_at = CURRENT_TIMESTAMP WHERE slug = ?`).run(slug)
 }

@@ -3,10 +3,11 @@ import { google } from '@ai-sdk/google'
 import { z } from 'zod'
 import { hydra, ensureTenant, waitForIngestion } from '../hydra'
 import { upsertPageHealth, upsertPageLinks, getAllPages } from '../db-helpers'
+import { findExistingPage, absorbIntoExisting } from './absorb-agent'
 
 export interface IngestResult {
   pagesCreated: number
-  pages: Array<{ slug: string; title: string; content: string; isNew: boolean; indexed: boolean }>
+  pages: Array<{ slug: string; title: string; type: string; content: string; isNew: boolean; indexed: boolean }>
 }
 
 async function verifyClaims(
@@ -66,7 +67,7 @@ export async function runIngestAgent(
           type: z.enum(['concept', 'person', 'place', 'event', 'tool', 'organization']),
           summary: z.string(),
           content: z.string().describe('150-300 word markdown, encyclopedic style'),
-          sourceSentences: z.array(z.string()).min(1).max(5),
+          sourceSentences: z.array(z.string()).min(1).max(10),
         })
       ),
     }),
@@ -95,7 +96,7 @@ Return JSON with a "pages" key containing an array. Each page must include:
 - type: concept | person | place | event | tool | organization
 - summary: one sentence from the source
 - content: 150-300 word markdown — only facts from the source
-- sourceSentences: array of 2-5 exact quotes (under 20 words each)
+- sourceSentences: array of 2-10 exact quotes (under 20 words each)
   from the source text that back up the main claims in this page
 `,
   }).catch((err: unknown) => {
@@ -106,7 +107,7 @@ Return JSON with a "pages" key containing an array. Each page must include:
     throw err
   })
 
-  const pages: Array<{ slug: string; title: string; content: string; isNew: boolean; indexed: boolean }> = []
+  const pages: Array<{ slug: string; title: string; type: string; content: string; isNew: boolean; indexed: boolean }> = []
   let pagesCreated = 0
 
   // Collect existing hydra_doc_ids to forcefully relate new pages to them
@@ -126,6 +127,24 @@ Return JSON with a "pages" key containing an array. Each page must include:
         continue
       }
 
+      // Absorb: check if page already exists — if so, enrich rather than overwrite
+      let finalContent = page.content
+      let finalSummary = page.summary
+      let finalSourceSentences = page.sourceSentences
+      let isNew = true
+
+      const existingPage = await findExistingPage(page.slug, tenantId)
+      if (existingPage) {
+        console.log(`[ingest] Absorbing into existing page: ${page.slug}`)
+        // Pass all known slugs so AI only creates links to real graph nodes (Fix 3)
+        const allKnownSlugs = existingPages.map(p => p.slug)
+        const merged = await absorbIntoExisting(existingPage, page, sourceText, allKnownSlugs)
+        finalContent = merged.content
+        finalSummary = merged.summary
+        finalSourceSentences = merged.sourceSentences
+        isNew = false
+      }
+
       // All existing pages + siblings already uploaded this batch
       const cortexSourceIds = [...existingHydraIds, ...batchHydraIds].filter(Boolean)
 
@@ -140,12 +159,12 @@ Return JSON with a "pages" key containing an array. Each page must include:
             title: page.title,
             type: 'document',
             content: {
-              markdown: `# ${page.title}\n\n${page.content}`,
+              markdown: `# ${page.title}\n\n${finalContent}`,
             },
             document_metadata: {
               category: page.type,
-              summary: page.summary,
-              sourceSentences: page.sourceSentences,
+              summary: finalSummary,
+              sourceSentences: finalSourceSentences,
               verified: true,
               verifiedAt: new Date().toISOString(),
               sourceId: sourceId.toString(),
@@ -167,7 +186,7 @@ Return JSON with a "pages" key containing an array. Each page must include:
         slug: page.slug,
         title: page.title,
         type: page.type,
-        summary: page.summary,
+        summary: finalSummary,
         source_id: sourceId,
         confidence: ready ? 100 : 60,
         stale_reason: ready ? undefined : 'Indexing may be incomplete',
@@ -175,14 +194,15 @@ Return JSON with a "pages" key containing an array. Each page must include:
       })
 
       // Parse [[wikilinks]] from content and store graph edges in SQLite
-      const linkedSlugs = [...page.content.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1].trim())
+      const linkedSlugs = [...finalContent.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1].trim())
       if (linkedSlugs.length) upsertPageLinks(page.slug, linkedSlugs)
 
       pages.push({
         slug: page.slug,
         title: page.title,
-        content: page.content,
-        isNew: true,
+        type: page.type,
+        content: finalContent,
+        isNew,
         indexed: ready,
       })
       pagesCreated++

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { hydra } from '@/lib/hydra'
+import { db } from '@/lib/db'
 
 export async function GET(
   req: NextRequest,
@@ -90,7 +91,20 @@ export async function GET(
         type: (s.additional_metadata?.category as string) || 'concept',
       }))
 
-    return NextResponse.json({ page, relatedPages })
+    // 3. Backlinks: pages that [[wikilink]] to this slug
+    const backlinkRows = db.prepare(`
+      SELECT pl.source_slug, p.title
+      FROM page_links pl
+      LEFT JOIN pages p ON p.slug = pl.source_slug
+      WHERE pl.target_slug = ?
+    `).all(slug) as Array<{ source_slug: string; title: string | null }>
+
+    const backlinks = backlinkRows.map(r => ({
+      slug: r.source_slug,
+      title: r.title ?? r.source_slug,
+    }))
+
+    return NextResponse.json({ page, relatedPages, backlinks })
   } catch (error: any) {
     console.error(`Error fetching page ${slug}:`, error)
     return NextResponse.json({ error: error.message }, { status: 500 })

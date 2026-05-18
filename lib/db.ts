@@ -98,6 +98,14 @@ function createTables(db: Database.Database): void {
       target_slug TEXT NOT NULL,
       PRIMARY KEY (source_slug, target_slug)
     );
+
+    -- Lint sweep audit trail — tracks last run time for incremental analysis
+    CREATE TABLE IF NOT EXISTS lint_sweeps (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      ran_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      pages_analyzed  INTEGER NOT NULL DEFAULT 0,
+      issues_found    INTEGER NOT NULL DEFAULT 0
+    );
   `)
 }
 
