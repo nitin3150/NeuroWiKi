@@ -7,9 +7,33 @@ function extractMarkdown(chunkContent: string): string {
     const doc = JSON.parse(chunkContent)
     return doc?.content?.markdown ?? ''
   } catch {
-    // chunk_content is plain text, not JSON — use as-is
     return chunkContent
   }
+}
+
+async function fetchPageContent(slug: string): Promise<string> {
+  const res = await hydra.recall.booleanRecall({
+    tenant_id: 'default',
+    query: slug,
+    operator: 'and',
+  }) as any
+
+  const sources: any[] = res?.sources ?? []
+  const match =
+    sources.find((s: any) => s.additional_metadata?.slug === slug || s.id === slug) ??
+    sources[0]
+
+  if (!match) return ''
+
+  const chunks: any[] = (res?.chunks ?? []).filter((c: any) => c.source_id === match.id)
+  const firstChunk = chunks[0]
+  const parsedDoc = firstChunk
+    ? (() => { try { return JSON.parse(firstChunk.chunk_content) } catch { return null } })()
+    : null
+
+  return parsedDoc?.content?.markdown
+    || chunks.map(c => extractMarkdown(c.chunk_content)).filter(Boolean).join('\n\n')
+    || ''
 }
 
 export async function GET() {
@@ -21,37 +45,19 @@ export async function GET() {
     updated_at: string
   }>
 
+  // Fetch all page content from HydraDB in parallel
+  const contentResults = await Promise.allSettled(
+    pages.map(p => fetchPageContent(p.slug))
+  )
+
   const zip = new JSZip()
   const folder = zip.folder('neurowiki-export')!
 
-  for (const page of pages) {
-    let content = ''
-
-    try {
-      const res = await hydra.recall.booleanRecall({
-        tenant_id: 'default',
-        query: page.slug,
-        operator: 'and',
-      }) as any
-
-      const sources: any[] = res?.sources ?? []
-      const match =
-        sources.find((s: any) => s.additional_metadata?.slug === page.slug || s.id === page.slug) ??
-        sources[0]
-
-      if (match) {
-        const chunks: any[] = (res?.chunks ?? []).filter((c: any) => c.source_id === match.id)
-        const firstChunk = chunks[0]
-        const parsedDoc = firstChunk
-          ? (() => { try { return JSON.parse(firstChunk.chunk_content) } catch { return null } })()
-          : null
-
-        content = parsedDoc?.content?.markdown
-          || chunks.map(c => extractMarkdown(c.chunk_content)).filter(Boolean).join('\n\n')
-          || ''
-      }
-    } catch (e) {
-      console.warn(`[export] Failed to fetch content for ${page.slug}:`, e)
+  pages.forEach((page, i) => {
+    const result = contentResults[i]
+    const rawContent = result.status === 'fulfilled' ? result.value : ''
+    if (result.status === 'rejected') {
+      console.warn(`[export] Failed to fetch content for ${page.slug}:`, result.reason)
     }
 
     const frontmatter = [
@@ -65,11 +71,11 @@ export async function GET() {
       '',
     ].join('\n')
 
-    // Strip leading heading if it duplicates the title (ingest writes "# Title\n\n...")
-    const body = content.replace(/^#\s+.+\n+/, '')
+    // Strip leading heading — ingest writes "# Title\n\n..." which duplicates frontmatter title
+    const body = rawContent.replace(/^#\s+.+\n+/, '')
 
     folder.file(`${page.slug}.md`, frontmatter + body)
-  }
+  })
 
   const buffer = await zip.generateAsync({ type: 'uint8array' })
 
