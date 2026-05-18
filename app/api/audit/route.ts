@@ -5,12 +5,36 @@ import { hydra } from '@/lib/hydra'
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const staleDays = parseInt(url.searchParams.get('staleDays') || '30', 10)
+  const skipDrift = url.searchParams.get('skipDrift') === '1'
 
   const stale = getStalePages(staleDays)
   const flagged = getFlaggedPages()
   const all = getAllPages()
-  
-  // Missing sync recovery reconciliation check
+
+  const pageSlugSet = new Set(all.map(p => p.slug))
+  const missingPages = [...new Set(
+    getAllPageLinks()
+      .map(l => l.target_slug.toLowerCase().replace(/\s+/g, '-'))
+      .filter(slug => !pageSlugSet.has(slug))
+  )]
+
+  const base = {
+    totalPages: all.length,
+    stalePages: stale.length,
+    flaggedPages: flagged.length,
+    healthScore: Math.round(((all.length - stale.length - flagged.length) / Math.max(all.length, 1)) * 100),
+    stale: stale.map(p => ({ slug: p.slug, title: p.title, last_validated: p.last_validated })),
+    flagged: flagged.map(p => ({ slug: p.slug, title: p.title, stale_reason: p.stale_reason, confidence: p.confidence })),
+    missingPages: missingPages.slice(0, 20),
+    missingCount: missingPages.length,
+  }
+
+  // Return SQLite-only stats immediately when skipDrift=1
+  if (skipDrift) {
+    return Response.json({ ...base, syncWarning: null })
+  }
+
+  // Full drift check against HydraDB
   let hydraCount = 0
   let syncWarning = null
   try {
@@ -20,9 +44,8 @@ export async function GET(req: NextRequest) {
       page: 1,
       page_size: 100,
     }) as any
-    const items = res?.sources ?? []
-    hydraCount = items.length
-    
+    hydraCount = (res?.sources ?? []).length
+
     if (hydraCount > all.length) {
       syncWarning = `Database drift detected: HydraDB contains ${hydraCount} pages but local SQLite index only has ${all.length}. Ingestion may have crashed before indexing finished.`
     } else if (hydraCount < all.length) {
@@ -32,28 +55,13 @@ export async function GET(req: NextRequest) {
     const is404 = e?.statusCode === 404 || e?.body?.detail?.error_code === 'NOT_FOUND'
     if (!is404) console.error('Failed to reconcile with HydraDB', e)
   }
-  
-  // Find [[wikilinks]] that point to non-existent pages.
-  // page_links stores edges from ingest; target_slug w/o matching page = missing.
-  const pageSlugSet = new Set(all.map(p => p.slug))
-  const missingPages = [...new Set(
-    getAllPageLinks()
-      .map(l => l.target_slug.toLowerCase().replace(/\s+/g, '-'))
-      .filter(slug => !pageSlugSet.has(slug))
-  )]
 
-  // When HydraDB has more pages than SQLite, use hydraCount as the display total
   const displayTotal = hydraCount > all.length ? hydraCount : all.length
 
   return Response.json({
+    ...base,
     totalPages: displayTotal,
-    stalePages: stale.length,
-    flaggedPages: flagged.length,
     healthScore: Math.round(((displayTotal - stale.length - flagged.length) / Math.max(displayTotal, 1)) * 100),
     syncWarning,
-    stale: stale.map(p => ({ slug: p.slug, title: p.title, last_validated: p.last_validated })),
-    flagged: flagged.map(p => ({ slug: p.slug, title: p.title, stale_reason: p.stale_reason, confidence: p.confidence })),
-    missingPages: missingPages.slice(0, 20),
-    missingCount: missingPages.length,
   })
 }

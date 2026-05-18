@@ -58,7 +58,7 @@ export async function runIngestAgent(
 
   // Step 2 — Generate pages with Gemini
   const result = await withGeminiRetry(() => generateObject({
-    model: google('gemini-2.0-flash-exp'),
+    model: google('gemini-2.0-flash'),
     providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     schema: z.object({
       pages: z.array(

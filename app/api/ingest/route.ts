@@ -88,7 +88,7 @@ async function scrapeUrl(url: string): Promise<{ title: string; text: string }> 
 // POST /api/ingest — supports text, url/urls (array), and file uploads
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return Response.json({ error: 'API key not configured' }, { status: 500 })
   }
   const encoder = new TextEncoder()

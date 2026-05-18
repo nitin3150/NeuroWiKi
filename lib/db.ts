@@ -43,6 +43,14 @@ function migrateColumns(db: Database.Database): void {
   const names = new Set(cols.map((c) => c.name))
   if (!names.has('summary')) db.exec(`ALTER TABLE pages ADD COLUMN summary TEXT`)
   if (!names.has('source_id')) db.exec(`ALTER TABLE pages ADD COLUMN source_id INTEGER`)
+
+  // Table-level migrations — idempotent, safe to run on every module evaluation
+  db.exec(`CREATE TABLE IF NOT EXISTS reindex_queue (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    hydra_id   TEXT NOT NULL UNIQUE,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`)
 }
 
 function createTables(db: Database.Database): void {
@@ -124,3 +132,6 @@ function createTables(db: Database.Database): void {
 // Reuse existing instance across hot-reloads in development
 export const db: Database.Database =
   globalThis.__db ?? (globalThis.__db = openDatabase())
+
+// Re-run migrations on every module evaluation so hot-reload picks up new tables
+migrateColumns(db)

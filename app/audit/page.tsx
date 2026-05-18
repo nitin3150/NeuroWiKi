@@ -23,7 +23,6 @@ export default function AuditPage() {
     stalePages: number
     flaggedPages: number
     healthScore: number
-    syncWarning: string | null
     stale: Array<{ slug: string; title: string; last_validated: string }>
     flagged: Array<{ slug: string; title: string; stale_reason: string; confidence: number }>
     missingPages: string[]
@@ -38,6 +37,8 @@ export default function AuditPage() {
   const [repairing, setRepairing] = useState(false)
   const [repairResult, setRepairResult] = useState<{ repaired: number; total: number } | null>(null)
   const [repairError, setRepairError] = useState<string | null>(null)
+  const [driftLoading, setDriftLoading] = useState(true)
+  const [syncWarning, setSyncWarning] = useState<string | null>(null)
 
   const runRepair = async () => {
     setRepairing(true)
@@ -48,7 +49,13 @@ export default function AuditPage() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setRepairResult({ repaired: data.repaired, total: data.total })
-      fetch('/api/audit').then(r => r.json()).then(setAudit)
+      // Refresh stats and re-check drift
+      fetch('/api/audit?skipDrift=1').then(r => r.json()).then(setAudit)
+      setDriftLoading(true)
+      fetch('/api/audit').then(r => r.json()).then(d => {
+        setSyncWarning(d.syncWarning)
+        setDriftLoading(false)
+      }).catch(() => setDriftLoading(false))
     } catch (e: any) {
       setRepairError(e.message)
     } finally {
@@ -78,7 +85,15 @@ export default function AuditPage() {
   }
 
   useEffect(() => {
-    fetch('/api/audit').then(r => r.json()).then(setAudit)
+    // SQLite stats — instant
+    fetch('/api/audit?skipDrift=1').then(r => r.json()).then(setAudit)
+    // Drift check — async, updates warning banner independently
+    fetch('/api/audit').then(r => r.json()).then(data => {
+      setSyncWarning(data.syncWarning)
+      // Also update totalPages / healthScore if drift was detected
+      if (data.syncWarning) setAudit(prev => prev ? { ...prev, totalPages: data.totalPages, healthScore: data.healthScore } : prev)
+      setDriftLoading(false)
+    }).catch(() => setDriftLoading(false))
   }, [])
 
   const runLint = async () => {
@@ -113,12 +128,17 @@ export default function AuditPage() {
 
       {audit && (
         <>
-          {audit.syncWarning && (
-            <FadeUp delay={0.35}>
+          <FadeUp delay={0.35}>
+            {driftLoading ? (
+              <div className="mb-8 flex items-center gap-2">
+                <Loader2 size={11} className="animate-spin" style={{ color: 'rgba(222,219,200,0.3)' }} />
+                <p className="text-[10px]" style={{ color: 'rgba(222,219,200,0.3)' }}>Checking sync status...</p>
+              </div>
+            ) : syncWarning ? (
               <div className="mb-8 bg-amber-950/30 border border-amber-900/50 rounded-xl p-4 flex items-start gap-3">
                 <span className="text-amber-500 text-sm mt-0.5">⚠️</span>
                 <div className="flex-1">
-                  <p className="text-xs text-amber-200/80 leading-relaxed">{audit.syncWarning}</p>
+                  <p className="text-xs text-amber-200/80 leading-relaxed">{syncWarning}</p>
                   {repairResult && (
                     <p className="text-xs text-emerald-400 mt-1">Repaired {repairResult.repaired} of {repairResult.total} pages.</p>
                   )}
@@ -137,8 +157,8 @@ export default function AuditPage() {
                   }
                 </button>
               </div>
-            </FadeUp>
-          )}
+            ) : null}
+          </FadeUp>
 
           {/* Health score */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-12">

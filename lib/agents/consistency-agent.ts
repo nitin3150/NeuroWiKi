@@ -99,7 +99,7 @@ Return JSON only.
 `
 
   const { object } = await withGeminiRetry(() => generateObject({
-    model: google('gemini-2.0-flash-exp'),
+    model: google('gemini-2.0-flash'),
     providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     schema: ContradictionSchema,
     prompt,
@@ -121,7 +121,7 @@ Return JSON only.
       const existing = await getPageBySlug(contradiction.existingPageSlug)
       if (existing) {
         const { object: rewritten } = await withGeminiRetry(() => generateObject({
-          model: google('gemini-2.0-flash-exp'),
+          model: google('gemini-2.0-flash'),
           providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
           schema: z.object({ content: z.string() }),
           prompt: `You are a wiki editor. Update this page to incorporate a correction.
