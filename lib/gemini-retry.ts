@@ -4,14 +4,6 @@ function isQuotaError(err: unknown): boolean {
   return status === 429 || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')
 }
 
-function parseRetryAfterMs(err: unknown): number {
-  const msg = (err as any)?.message ?? (err as any)?.toString() ?? ''
-  // Gemini errors: "Please retry after 28 seconds" / "retry in 30s" / "retryDelay: \"35s\""
-  const match = msg.match(/retry(?:\s+after|(?:\s+in)?)[\s:\"]*(\d+(?:\.\d+)?)\s*s/i)
-  if (match) return Math.ceil(parseFloat(match[1])) * 1000
-  return 0
-}
-
 export async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
   const MAX_RETRIES = 3
   let lastErr: unknown
@@ -23,16 +15,14 @@ export async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
       lastErr = err
       if (!isQuotaError(err) || i === MAX_RETRIES) break
 
-      // Use the API-specified delay if present, otherwise exponential: 15s → 30s → 60s
-      const apiDelay = parseRetryAfterMs(err)
-      const backoff = apiDelay || ([15000, 30000, 60000][i] ?? 60000)
-      console.warn(`[gemini-retry] Quota hit, waiting ${backoff / 1000}s (attempt ${i + 1}/${MAX_RETRIES})`)
+      const backoff = [15000, 30000, 45000][i] ?? 45000
+      console.warn(`[gemini-retry] Quota error hit. Retry attempt ${i + 1}/${MAX_RETRIES} - waiting ${backoff / 1000}s before retrying. Error: ${(err as any)?.message || err}`)
       await new Promise(r => setTimeout(r, backoff))
     }
   }
 
   if (isQuotaError(lastErr)) {
-    throw new Error('AI quota reached — please wait a moment and try again.')
+    throw new Error(`AI quota reached after 3 retry attempts. Last error: ${(lastErr as any)?.message || lastErr}`)
   }
   throw lastErr
 }

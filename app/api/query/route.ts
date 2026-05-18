@@ -1,6 +1,5 @@
 import { hydra } from '@/lib/hydra'
-import { google } from '@ai-sdk/google'
-import { streamText } from 'ai'
+import { smartStreamText } from '@/lib/ai-client'
 import { db } from '@/lib/db'
 
 export async function POST(req: Request) {
@@ -80,11 +79,10 @@ Always cite which page your answer comes from using format: (Source: Page N — 
 If the answer is not in the wiki, say "This isn't covered in the wiki yet. Try adding more sources."
 Keep answers concise and factual.`
 
-  const stream = streamText({
-    model: google('gemini-2.0-flash'),
+  const stream = await smartStreamText({
     system: systemPrompt,
     prompt: `Question: ${question}\n\nWiki context:\n${context}`,
-    maxOutputTokens: 600,
+    maxTokens: 500,
   })
 
   return stream.toTextStreamResponse()

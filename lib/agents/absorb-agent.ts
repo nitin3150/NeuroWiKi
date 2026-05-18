@@ -1,8 +1,6 @@
-import { generateObject } from 'ai'
-import { google } from '@ai-sdk/google'
+import { smartGenerateObject } from '@/lib/ai-client'
 import { z } from 'zod'
 import { hydra } from '@/lib/hydra'
-import { withGeminiRetry } from '@/lib/gemini-retry'
 
 export interface ExistingPage {
   slug: string
@@ -112,9 +110,7 @@ export async function absorbIntoExisting(
     ? availableSlugs.join(', ')
     : '(no slugs available — do not add wikilinks)'
 
-  const { object } = await withGeminiRetry(() => generateObject({
-    model: google('gemini-2.0-flash'),
-    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+  const { object } = await smartGenerateObject({
     schema: MergeSchema,
     prompt: `You are an expert wiki editor updating an existing knowledge base page with new information.
 
@@ -150,7 +146,7 @@ ${slugList}
 6. CITATIONS: Your 'sourceSentences' output MUST include ALL existing citations listed above PLUS 1-4 new exact quotes from the new raw source text backing newly added claims.
 
 Return unified content, updated summary, and combined sourceSentences.`,
-  }))
+  })
 
   return {
     content: object.content,

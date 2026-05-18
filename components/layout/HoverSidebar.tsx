@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain, BookOpen, Plus, Search,
-  Network, ShieldCheck, User, X, Database
+  Network, ShieldCheck, User, X, Database, Info
 } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 
@@ -16,6 +16,7 @@ const navItems = [
   { label: 'Search & Ask', href: '/search', icon: Search },
   { label: 'Knowledge Graph', href: '/graph', icon: Network },
   { label: 'Wiki Health', href: '/audit', icon: ShieldCheck },
+  { label: 'How to Use', href: '/docs', icon: Info },
 ]
 
 export function HoverSidebar() {

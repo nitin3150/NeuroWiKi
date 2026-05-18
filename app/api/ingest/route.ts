@@ -229,10 +229,20 @@ export async function POST(req: NextRequest) {
         controller.close()
       } catch (error: any) {
         console.error('[ingest] Error:', error?.stack ?? error)
-        const msg: string = error.message || 'Unknown error occurred'
-        const retryMatch = msg.match(/retry(?:\s+after|:?)\s*(\d+)\s*second/i)
-        const retryAfter = retryMatch ? parseInt(retryMatch[1], 10) : undefined
-        send(JSON.stringify({ error: msg, ...(retryAfter !== undefined && { retryAfter }) }))
+        const msg = (error as Error).message || ''
+
+        if (msg.includes('exhausted') || msg.includes('quota') || msg.includes('429')) {
+          send(JSON.stringify({
+            error: 'All AI models are rate-limited right now. Please wait 1 minute and try again.',
+            code: 'QUOTA_EXHAUSTED',
+            retryAfter: 60,
+          }))
+        } else {
+          send(JSON.stringify({
+            error: `Ingest failed: ${msg.slice(0, 200)}`,
+            code: 'INGEST_ERROR',
+          }))
+        }
         controller.close()
       }
     },

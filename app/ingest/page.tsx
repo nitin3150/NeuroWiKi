@@ -397,25 +397,53 @@ export default function IngestPage() {
           )}
         </FadeUp>
 
-        {/* Error */}
+        {/* Error — quota gets a warm amber "cooling down" banner; other errors stay red */}
         {error && (
-          <div className="mt-6 bg-red-950/30 border border-red-900/50 rounded-xl p-3 flex items-start gap-3">
-            <span className="text-red-500 text-xs mt-0.5">✗</span>
-            <div className="flex-1">
-              <p className="text-[11px] text-red-200/80 leading-relaxed font-mono">{error}</p>
-              {retryAfter && (
-                <p className="text-[10px] text-amber-400/70 mt-1">Retry in {retryAfter}s...</p>
-              )}
+          error.includes('quota') || error.includes('cooling') || error.includes('429') || error.includes('exhausted') ? (
+            <div
+              className="mt-6 rounded-xl p-4"
+              style={{ background: 'rgba(200,100,50,0.08)', border: '1px solid rgba(200,120,50,0.2)' }}
+            >
+              <div className="flex items-start gap-3">
+                <span style={{ fontSize: 16 }}>⏳</span>
+                <div className="flex-1">
+                  <p className="text-sm font-medium mb-1" style={{ color: 'rgba(222,180,100,0.9)' }}>
+                    AI is cooling down
+                  </p>
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'rgba(222,180,100,0.6)' }}>
+                    Free-tier rate limit hit across all backup models.
+                    {retryAfter ? ` Auto-retry in ${retryAfter}s, or click Retry now.` : ' Wait ~60 seconds and try again.'}
+                  </p>
+                </div>
+                <button
+                  onClick={tab === 'bulk' ? handleBulkSubmit : handleSubmit}
+                  className="shrink-0 text-[10px] px-3 py-1.5 rounded-full transition"
+                  style={{
+                    border: '1px solid rgba(200,150,50,0.35)',
+                    color: 'rgba(222,180,100,0.8)',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
             </div>
-            {(error.includes('busy') || error.includes('quota')) && (
+          ) : (
+            <div className="mt-6 bg-red-950/30 border border-red-900/50 rounded-xl p-3 flex items-start gap-3">
+              <span className="text-red-500 text-xs mt-0.5">✗</span>
+              <div className="flex-1">
+                <p className="text-[11px] text-red-200/80 leading-relaxed font-mono">{error}</p>
+                {retryAfter && (
+                  <p className="text-[10px] text-amber-400/70 mt-1">Retry in {retryAfter}s...</p>
+                )}
+              </div>
               <button
                 onClick={tab === 'bulk' ? handleBulkSubmit : handleSubmit}
                 className="text-[10px] px-3 py-1 rounded-full border border-red-500/40 text-red-400 hover:bg-red-500/10 transition shrink-0"
               >
                 Retry
               </button>
-            )}
-          </div>
+            </div>
+          )
         )}
 
         {/* Results */}
