@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { hydra } from '@/lib/hydra'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export async function GET() {
   try {
@@ -11,7 +11,7 @@ export async function GET() {
         tenant_id: 'default',
         kind: 'knowledge',
         page: 1,
-        page_size: 100,
+        page_size: 6,
       })) as any
     } catch (e: any) {
       if (e.message?.includes('Tenant default does not exist') || e.status === 404) {

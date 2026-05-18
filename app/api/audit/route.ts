@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { getStalePages, getFlaggedPages, getAllPages } from '@/lib/db-helpers'
+import { getStalePages, getFlaggedPages, getAllPages, getAllPageLinks } from '@/lib/db-helpers'
 import { hydra } from '@/lib/hydra'
 
 export async function GET(req: NextRequest) {
@@ -33,19 +33,14 @@ export async function GET(req: NextRequest) {
     if (!is404) console.error('Failed to reconcile with HydraDB', e)
   }
   
-  // Find [[wikilinks]] that don't have pages
+  // Find [[wikilinks]] that point to non-existent pages.
+  // page_links stores edges from ingest; target_slug w/o matching page = missing.
   const pageSlugSet = new Set(all.map(p => p.slug))
-  const missingPages: string[] = []
-  
-  for (const page of all) {
-    const matches = (page.content || '').matchAll(/\[\[([^\]]+)\]\]/g)
-    for (const match of matches) {
-      const linkedSlug = match[1].toLowerCase().replace(/\s+/g, '-')
-      if (!pageSlugSet.has(linkedSlug) && !missingPages.includes(linkedSlug)) {
-        missingPages.push(linkedSlug)
-      }
-    }
-  }
+  const missingPages = [...new Set(
+    getAllPageLinks()
+      .map(l => l.target_slug.toLowerCase().replace(/\s+/g, '-'))
+      .filter(slug => !pageSlugSet.has(slug))
+  )]
 
   return Response.json({
     totalPages: all.length,

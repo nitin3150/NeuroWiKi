@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { X, Loader2, Search } from 'lucide-react'
@@ -25,6 +25,11 @@ const TYPE_COLORS: Record<string, string> = {
 }
 const DEFAULT_COLOR = '#555550'
 
+// Module-level stable callbacks (avoid inline arrows that re-init ForceGraph2D internals)
+const CANVAS_MODE_REPLACE = () => 'replace' as const
+const LINK_COLOR = () => 'rgba(222,219,200,0.3)'
+const PARTICLE_COLOR = () => 'rgba(222,219,200,0.7)'
+
 interface GraphNode {
   id: string; slug: string; title: string
   type: string; connections: number; x?: number; y?: number
@@ -43,6 +48,11 @@ export default function GraphPage() {
   const [error, setError] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
   const containerRef = useRef<HTMLDivElement>(null)
+  // Refs mirror state so paintNode reads latest values without changing identity
+  const searchRef = useRef('')
+  const selectedRef = useRef<GraphNode | null>(null)
+  useEffect(() => { searchRef.current = nodeSearch.toLowerCase() }, [nodeSearch])
+  useEffect(() => { selectedRef.current = selected }, [selected])
 
   useEffect(() => {
     const updateDims = () => {
@@ -78,55 +88,56 @@ export default function GraphPage() {
       .catch(err => { setError(err.message); setLoading(false) })
   }, [])
 
-  // Filtered graph data
-  const graphData = {
-    nodes: rawData.nodes.filter(n => {
-      const typeOk = activeTypes.has(n.type || 'concept')
-      const searchOk = !nodeSearch || n.title.toLowerCase().includes(nodeSearch.toLowerCase())
-      return typeOk && (!nodeSearch || searchOk)
-    }),
-    links: rawData.links.filter(l => {
+  // Filtered graph data — depends ONLY on rawData + activeTypes.
+  // Search must NOT alter graphData (would tear apart D3 simulation each keystroke);
+  // search is a paint-time concern handled in paintNode via dimming.
+  const graphData = useMemo(() => {
+    const visibleNodes = rawData.nodes.filter(n => activeTypes.has(n.type || 'concept'))
+    const visibleIds = new Set(visibleNodes.map(n => n.id))
+    const links = rawData.links.filter(l => {
       const sId = String(typeof l.source === 'object' ? (l.source as GraphNode).id : l.source)
       const tId = String(typeof l.target === 'object' ? (l.target as GraphNode).id : l.target)
-      return rawData.nodes
-        .filter(n => activeTypes.has(n.type || 'concept'))
-        .some(n => n.id === sId) &&
-        rawData.nodes
-          .filter(n => activeTypes.has(n.type || 'concept'))
-          .some(n => n.id === tId)
+      return visibleIds.has(sId) && visibleIds.has(tId)
     })
-  }
+    return { nodes: visibleNodes, links }
+  }, [rawData, activeTypes])
 
+  // Single source of truth for node radius — paint AND hit area use this
+  const nodeRadius = useCallback((node: GraphNode): number => {
+    return Math.max(4, Math.min(4 + (node.connections || 1) * 1.8, 18))
+  }, [])
+
+  // Stable identity — reads search/selected from refs so prop never changes.
   const paintNode = useCallback((
     node: GraphNode,
     ctx: CanvasRenderingContext2D,
     globalScale: number
   ) => {
     const color = TYPE_COLORS[node.type] || DEFAULT_COLOR
-    const size = Math.max(4, Math.min(4 + (node.connections || 1) * 1.8, 18))
+    const size = nodeRadius(node)
     const x = node.x ?? 0
     const y = node.y ?? 0
-    const isHighlighted = nodeSearch && node.title.toLowerCase().includes(nodeSearch.toLowerCase())
+    const q = searchRef.current
+    const searching = q.length > 0
+    const isMatch = searching && node.title.toLowerCase().includes(q)
+    const isDimmed = searching && !isMatch
 
-    // Glow for highlighted nodes
-    if (isHighlighted) {
+    if (isMatch) {
       ctx.beginPath()
       ctx.arc(x, y, size + 6, 0, 2 * Math.PI)
       const gradient = ctx.createRadialGradient(x, y, size, x, y, size + 6)
-      gradient.addColorStop(0, color + '60')
+      gradient.addColorStop(0, color + '90')
       gradient.addColorStop(1, color + '00')
       ctx.fillStyle = gradient
       ctx.fill()
     }
 
-    // Node circle
     ctx.beginPath()
     ctx.arc(x, y, size, 0, 2 * Math.PI)
-    ctx.fillStyle = isHighlighted ? color : color + 'CC'
+    ctx.fillStyle = isMatch ? color : isDimmed ? color + '20' : color + 'CC'
     ctx.fill()
 
-    // Ring for selected
-    if (selected?.id === node.id) {
+    if (selectedRef.current?.id === node.id) {
       ctx.beginPath()
       ctx.arc(x, y, size + 3, 0, 2 * Math.PI)
       ctx.strokeStyle = '#DEDBC8'
@@ -134,20 +145,31 @@ export default function GraphPage() {
       ctx.stroke()
     }
 
-    // Label
-    if (globalScale > 0.5 || (node.connections || 1) > 2 || isHighlighted) {
+    if (!isDimmed && (globalScale > 0.5 || (node.connections || 1) > 2 || isMatch)) {
       const fontSize = Math.max(9, 11 / globalScale)
       ctx.font = `${fontSize}px Almarai, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.fillStyle = isHighlighted ? 'rgba(222,219,200,0.95)' : 'rgba(222,219,200,0.65)'
+      ctx.fillStyle = isMatch ? 'rgba(222,219,200,0.95)' : 'rgba(222,219,200,0.65)'
       ctx.fillText(
         (node.title || '').slice(0, 18),
         x,
         y + size + 3
       )
     }
-  }, [selected, nodeSearch])
+  }, [nodeRadius])
+
+  // Hit area — uses the same radius as visual to keep clicks aligned
+  const paintNodePointerArea = useCallback((
+    node: GraphNode,
+    color: string,
+    ctx: CanvasRenderingContext2D
+  ) => {
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.arc(node.x ?? 0, node.y ?? 0, nodeRadius(node), 0, 2 * Math.PI)
+    ctx.fill()
+  }, [nodeRadius])
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelected(node)
@@ -155,6 +177,10 @@ export default function GraphPage() {
 
   const handleLinkHover = useCallback((link: GraphLink | null) => {
     setHoveredLink(link)
+  }, [])
+
+  const handleBackgroundClick = useCallback(() => {
+    setSelected(null)
   }, [])
 
   const toggleType = (type: string) => {
@@ -204,15 +230,16 @@ export default function GraphPage() {
           height={dimensions.height}
           backgroundColor="#000000"
           nodeCanvasObject={paintNode as unknown as (node: object, ctx: CanvasRenderingContext2D, globalScale: number) => void}
-          nodeCanvasObjectMode={() => 'replace'}
-          linkColor={() => 'rgba(222,219,200,0.3)'}
+          nodeCanvasObjectMode={CANVAS_MODE_REPLACE}
+          nodePointerAreaPaint={paintNodePointerArea as unknown as (node: object, color: string, ctx: CanvasRenderingContext2D) => void}
+          linkColor={LINK_COLOR}
           linkWidth={1.5}
-          linkOpacity={1}
           linkDirectionalParticles={2}
           linkDirectionalParticleWidth={2}
           linkDirectionalParticleSpeed={0.004}
-          linkDirectionalParticleColor={() => 'rgba(222,219,200,0.7)'}
+          linkDirectionalParticleColor={PARTICLE_COLOR}
           onNodeClick={handleNodeClick as unknown as (node: object) => void}
+          onBackgroundClick={handleBackgroundClick}
           onLinkHover={handleLinkHover as unknown as (link: object | null) => void}
           cooldownTicks={100}
           d3AlphaDecay={0.02}
@@ -343,7 +370,7 @@ export default function GraphPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute bottom-12 left-1/2 -translate-x-1/2 w-72 rounded-2xl p-5 z-20"
+            className="absolute bottom-6 right-6 w-72 rounded-2xl p-5 z-20"
             style={{
               background: 'rgba(14,14,14,0.97)',
               border: '1px solid rgba(255,255,255,0.1)',

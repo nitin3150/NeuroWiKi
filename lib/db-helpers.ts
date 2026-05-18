@@ -111,20 +111,7 @@ export function markSourceProcessed(id: number): void {
   db.prepare<[number]>(`UPDATE sources SET processed = 1 WHERE id = ?`).run(id)
 }
 
-/**
- * Return only unprocessed sources (processed = 0).
- */
-export function getUnprocessedSources(): Source[] {
-  return db
-    .prepare<[], Source>(
-      `SELECT id, url, title, raw_content, processed, created_at
-       FROM sources
-       WHERE processed = 0
-       ORDER BY created_at ASC`
-    )
-    .all()
-}
-
+//removed getUnprocessedSources function since it's not currently used, but can be re-added if needed in the future.
 // ---------------------------------------------------------------------------
 // Logs
 // ---------------------------------------------------------------------------
@@ -162,19 +149,7 @@ export function getAllLogs(): Log[] {
     .all()
 }
 
-/**
- * Return log entries linked to a specific source.
- */
-export function getLogsBySourceId(sourceId: number): Log[] {
-  return db
-    .prepare<[number], Log>(
-      `SELECT id, source_id, pages_created, pages_updated, message, created_at
-       FROM logs
-       WHERE source_id = ?
-       ORDER BY created_at DESC`
-    )
-    .all(sourceId)
-}
+//getLogsBySourceId function removed since it's not currently used, but can be re-added if needed in the future.
 
 // ---------------------------------------------------------------------------
 // Pages (Wiki Health Deprecation Pipeline)
@@ -286,15 +261,4 @@ export function getPagesUpdatedSince(since: string): PageHealth[] {
   ).all(since)
 }
 
-// ---------------------------------------------------------------------------
-
-export function archivePage(slug: string): void {
-  db.prepare<[string]>(`UPDATE pages SET is_stale = 1, confidence = 0, updated_at = CURRENT_TIMESTAMP WHERE slug = ?`).run(slug)
-}
-
-export function restorePage(slug: string): void {
-  db.prepare<[string]>(`
-    UPDATE pages SET is_stale = 0, stale_reason = NULL, confidence = 80,
-    last_validated = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE slug = ?
-  `).run(slug)
-}
+//archivePage and restorePage functions removed since they're not currently used, but can be re-added if needed in the future.

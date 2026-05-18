@@ -35,10 +35,19 @@ export default function SourcesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: source.raw_content }),
       })
-      const data = await res.json()
+      const textResponse = await res.text()
+      const lines = textResponse.split('\n').filter(Boolean)
+      let data: any = null
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const parsed = JSON.parse(lines[i])
+          if (parsed.final || parsed.error) { data = parsed; break }
+        } catch { /* skip */ }
+      }
+      if (!data || data.error) throw new Error(data?.error ?? 'No response')
       toast.success(`Re-ingested: ${data.pagesCreated} pages created`)
-    } catch {
-      toast.error('Re-ingest failed')
+    } catch (e: any) {
+      toast.error(`Re-ingest failed: ${e.message ?? 'Unknown'}`)
     } finally {
       setReingesting(null)
     }
