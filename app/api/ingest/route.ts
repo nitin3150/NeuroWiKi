@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { Readability } from '@mozilla/readability'
 import { JSDOM } from 'jsdom'
+import pdfParse from 'pdf-parse'
 import { createSource, createLog } from '@/lib/db-helpers'
 import { runIngestAgent } from '@/lib/agents/ingest-agent'
 import { runConsistencyCheck } from '@/lib/agents/consistency-agent'
@@ -28,16 +29,26 @@ export async function POST(req: NextRequest) {
           urlStr = (url as string) ?? null
           const response = await fetch(url)
           if (!response.ok) throw new Error(`Failed to fetch URL: ${response.statusText}`)
-          const html = await response.text()
-          const doc = new JSDOM(html, { url })
-          const reader = new Readability(doc.window.document)
-          const article = reader.parse()
-          
-          if (article) {
-            sourceText = article.textContent || ''
-            sourceTitle = article.title || 'Extracted Article'
+
+          const contentType = response.headers.get('content-type') ?? ''
+
+          if (contentType.includes('application/pdf')) {
+            const buffer = await response.arrayBuffer()
+            const data = await pdfParse(Buffer.from(buffer))
+            sourceText = data.text
+            sourceTitle = (data.info?.Title as string) || new URL(url).pathname.split('/').pop() || 'PDF Document'
+            if (!sourceText.trim()) throw new Error('PDF appears to have no extractable text (may be scanned image).')
           } else {
-            throw new Error('Readability failed to parse the page.')
+            const html = await response.text()
+            const doc = new JSDOM(html, { url })
+            const reader = new Readability(doc.window.document)
+            const article = reader.parse()
+            if (article) {
+              sourceText = article.textContent || ''
+              sourceTitle = article.title || 'Extracted Article'
+            } else {
+              throw new Error('Readability failed to parse the page.')
+            }
           }
         } else if (text) {
           sourceText = text
@@ -58,6 +69,7 @@ export async function POST(req: NextRequest) {
           processed: 0
         })
 
+        console.log(`[ingest] source=${source.id} title="${sourceTitle}" length=${sourceText.length}`)
         send("AI is analyzing content...")
         // 3. Run runIngestAgent() — stores pages in HydraDB
         const result = await runIngestAgent(sourceText, source.id)
@@ -111,6 +123,7 @@ export async function POST(req: NextRequest) {
         }))
         controller.close()
       } catch (error: any) {
+        console.error('[ingest] Error:', error?.stack ?? error)
         send(JSON.stringify({ error: error.message || 'Unknown error occurred' }))
         controller.close()
       }
