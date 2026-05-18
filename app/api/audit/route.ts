@@ -18,9 +18,9 @@ export async function GET(req: NextRequest) {
       tenant_id: 'default',
       kind: 'knowledge',
       page: 1,
-      page_size: 1000,
+      page_size: 100,
     }) as any
-    const items = res?.results ?? res?.data ?? res?.items ?? []
+    const items = res?.sources ?? []
     hydraCount = items.length
     
     if (hydraCount > all.length) {

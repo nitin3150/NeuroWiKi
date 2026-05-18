@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Zap } from 'lucide-react'
 import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 
@@ -30,6 +30,26 @@ export default function AuditPage() {
   const [lint, setLint] = useState<LintReport | null>(null)
   const [lintLoading, setLintLoading] = useState(false)
   const [lintError, setLintError] = useState<string | null>(null)
+  const [fixingIsland, setFixingIsland] = useState<number | null>(null)
+  const [fixResults, setFixResults] = useState<Record<number, { connected: number; total: number }>>({})
+
+  const fixIsland = async (index: number, slugs: string[]) => {
+    setFixingIsland(index)
+    try {
+      const res = await fetch('/api/fix-islands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slugs }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setFixResults(prev => ({ ...prev, [index]: { connected: data.connected, total: data.total } }))
+    } catch (e: any) {
+      setLintError(`Fix failed: ${e.message}`)
+    } finally {
+      setFixingIsland(null)
+    }
+  }
 
   useEffect(() => {
     fetch('/api/audit').then(r => r.json()).then(setAudit)
@@ -226,9 +246,28 @@ export default function AuditPage() {
                 <div className="space-y-2">
                   {lint.islands.map((island, i) => (
                     <div key={i} className="bg-amber-950/15 border border-amber-900/25 rounded-xl p-4">
-                      <p className="text-[10px] mb-2" style={{ color: 'rgba(222,219,200,0.4)' }}>
-                        {island.slugs.length} pages — no path to main cluster
-                      </p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px]" style={{ color: 'rgba(222,219,200,0.4)' }}>
+                          {island.slugs.length} pages — no path to main cluster
+                        </p>
+                        {fixResults[i] ? (
+                          <span className="text-[10px] text-emerald-400">
+                            ✓ {fixResults[i].connected}/{fixResults[i].total} connected
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => fixIsland(i, island.slugs)}
+                            disabled={fixingIsland !== null}
+                            className="flex items-center gap-1.5 text-[10px] px-3 py-1 rounded-full border border-amber-900/50 hover:border-amber-500/50 transition disabled:opacity-40"
+                            style={{ color: 'rgba(222,219,200,0.6)' }}
+                          >
+                            {fixingIsland === i
+                              ? <><Loader2 size={9} className="animate-spin" /> Fixing...</>
+                              : <><Zap size={9} /> Fix Island</>
+                            }
+                          </button>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {island.slugs.map((slug, j) => (
                           <Link key={slug} href={`/wiki/${slug}`}

@@ -174,7 +174,7 @@ export async function runLintSweep(tenantId: string = 'default'): Promise<LintRe
         .join('\n\n---\n\n')
 
       const { object } = await generateObject({
-        model: google('gemini-2.5-flash'),
+        model: google('gemini-2.0-flash'),
         providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
         schema: GapSchema,
         prompt: `You are a wiki health auditor. Analyze the PAGES BEING ANALYZED below for:
