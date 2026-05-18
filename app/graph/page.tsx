@@ -57,6 +57,7 @@ export default function GraphPage() {
   const [isMobile, setIsMobile] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const fgRef = useRef<any>(null)
+  const lastNodeClickTime = useRef(0)
   // Refs mirror state so paintNode reads latest values without changing identity
   const searchRef = useRef('')
   const selectedRef = useRef<GraphNode | null>(null)
@@ -193,7 +194,11 @@ export default function GraphPage() {
   }, [graphData, nodeRadius])
 
   const handleNodeClick = useCallback((node: GraphNode) => {
+    lastNodeClickTime.current = Date.now()
     setSelected(node)
+    // Fly camera to clicked node
+    fgRef.current?.centerAt(node.x, node.y, 600)
+    fgRef.current?.zoom(4, 600)
   }, [])
 
   const handleLinkHover = useCallback((link: GraphLink | null) => {
@@ -201,6 +206,8 @@ export default function GraphPage() {
   }, [])
 
   const handleBackgroundClick = useCallback(() => {
+    // Guard: ForceGraph fires background click right after node click — ignore within 200ms
+    if (Date.now() - lastNodeClickTime.current < 200) return
     setSelected(null)
   }, [])
 
@@ -432,36 +439,44 @@ export default function GraphPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute bottom-6 right-6 w-72 rounded-2xl p-5 z-20"
-            style={{
-              background: 'rgba(14,14,14,0.97)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              backdropFilter: 'blur(16px)',
-            }}
+            className="absolute bottom-6 right-6 w-72 z-20"
           >
-            <div className="flex items-start justify-between mb-3">
-              <span
-                className="text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-full"
-                style={{ background: '#1a1a1a', color: 'rgba(222,219,200,0.55)' }}
+            <Link href={`/wiki/${selected.slug}`} className="block">
+              <div
+                className="rounded-2xl p-5 hover:border-white/20 transition-colors cursor-pointer"
+                style={{
+                  background: 'rgba(14,14,14,0.97)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  backdropFilter: 'blur(16px)',
+                }}
               >
-                {selected.type}
-              </span>
-              <button onClick={() => setSelected(null)} className="opacity-40 hover:opacity-100 transition">
-                <X size={13} color="#DEDBC8" />
-              </button>
-            </div>
-            <h3 className="text-base font-medium mb-1" style={{ color: '#E1E0CC' }}>
-              {selected.title}
-            </h3>
-            <p className="text-[10px] mb-3" style={{ color: 'rgba(222,219,200,0.3)' }}>
-              {selected.connections || 0} connections
-            </p>
-            <Link
-              href={`/wiki/${selected.slug}`}
-              className="text-[11px] tracking-wider uppercase hover:opacity-100 transition-opacity"
-              style={{ color: 'rgba(222,219,200,0.5)' }}
-            >
-              Open page →
+                <div className="flex items-start justify-between mb-3">
+                  <span
+                    className="text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-full"
+                    style={{ background: '#1a1a1a', color: 'rgba(222,219,200,0.55)' }}
+                  >
+                    {selected.type}
+                  </span>
+                  <button
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); setSelected(null) }}
+                    className="opacity-40 hover:opacity-100 transition"
+                  >
+                    <X size={13} color="#DEDBC8" />
+                  </button>
+                </div>
+                <h3 className="text-base font-medium mb-1" style={{ color: '#E1E0CC' }}>
+                  {selected.title}
+                </h3>
+                <p className="text-[10px] mb-3" style={{ color: 'rgba(222,219,200,0.3)' }}>
+                  {selected.connections || 0} connections
+                </p>
+                <span
+                  className="text-[11px] tracking-wider uppercase"
+                  style={{ color: 'rgba(222,219,200,0.5)' }}
+                >
+                  Open page →
+                </span>
+              </div>
             </Link>
           </motion.div>
         )}
