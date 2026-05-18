@@ -119,9 +119,29 @@ Return JSON only.
     ) {
       const existing = await getPageBySlug(contradiction.existingPageSlug)
       if (existing) {
+        const { object: rewritten } = await generateObject({
+          model: google('gemini-2.5-flash'),
+          providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+          schema: z.object({ content: z.string() }),
+          prompt: `You are a wiki editor. Update this page to incorporate a correction.
+
+EXISTING CONTENT:
+"""
+${existing.content}
+"""
+
+CORRECTION TO INTEGRATE:
+"${contradiction.suggestedUpdate}"
+
+Rules:
+- Integrate the correction naturally into the relevant section — do not append it at the end
+- Keep all other content intact
+- Do not add headers or notes about the update
+- Return only the updated content`,
+        })
         await upsertPage({
           ...existing,
-          content: existing.content + `\n\n> **Updated:** ${contradiction.suggestedUpdate}`,
+          content: rewritten.content,
           updated_at: new Date().toISOString(),
         })
         updated++
