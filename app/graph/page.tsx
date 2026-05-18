@@ -5,6 +5,13 @@ import Link from 'next/link'
 import { X, Loader2, Search } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { forceCollide, forceX, forceY } = require('d3-force-3d') as {
+  forceCollide: (radius: (node: any) => number) => any
+  forceX: (x: number) => { strength: (s: number) => any }
+  forceY: (y: number) => { strength: (s: number) => any }
+}
+
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
   ssr: false,
   loading: () => (
@@ -47,7 +54,9 @@ export default function GraphPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+  const [isMobile, setIsMobile] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const fgRef = useRef<any>(null)
   // Refs mirror state so paintNode reads latest values without changing identity
   const searchRef = useRef('')
   const selectedRef = useRef<GraphNode | null>(null)
@@ -56,6 +65,7 @@ export default function GraphPage() {
 
   useEffect(() => {
     const updateDims = () => {
+      setIsMobile(window.innerWidth < 640)
       if (containerRef.current) {
         setDimensions({
           width: containerRef.current.offsetWidth,
@@ -145,16 +155,16 @@ export default function GraphPage() {
       ctx.stroke()
     }
 
-    if (!isDimmed && (globalScale > 0.5 || (node.connections || 1) > 2 || isMatch)) {
-      const fontSize = Math.max(9, 11 / globalScale)
+    if (!isDimmed && (globalScale > 1.2 || (node.connections || 1) > 4 || isMatch)) {
+      const fontSize = Math.max(7, 8 / globalScale)
       ctx.font = `${fontSize}px Almarai, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.fillStyle = isMatch ? 'rgba(222,219,200,0.95)' : 'rgba(222,219,200,0.65)'
+      ctx.fillStyle = isMatch ? 'rgba(222,219,200,0.95)' : 'rgba(222,219,200,0.5)'
       ctx.fillText(
-        (node.title || '').slice(0, 18),
+        (node.title || '').slice(0, 14),
         x,
-        y + size + 3
+        y + size + 2
       )
     }
   }, [nodeRadius])
@@ -170,6 +180,17 @@ export default function GraphPage() {
     ctx.arc(node.x ?? 0, node.y ?? 0, nodeRadius(node), 0, 2 * Math.PI)
     ctx.fill()
   }, [nodeRadius])
+
+  // Inject collision + stronger repulsion whenever visible graph changes
+  useEffect(() => {
+    if (!fgRef.current) return
+    fgRef.current.d3Force('collide', forceCollide((node: GraphNode) => nodeRadius(node) + 18))
+    fgRef.current.d3Force('charge')?.strength(-10)
+    fgRef.current.d3Force('link')?.distance(20)
+    fgRef.current.d3Force('x', forceX(0).strength(0.08))
+    fgRef.current.d3Force('y', forceY(0).strength(0.08))
+    fgRef.current.d3ReheatSimulation()
+  }, [graphData, nodeRadius])
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelected(node)
@@ -223,8 +244,48 @@ export default function GraphPage() {
             Add Source →
           </Link>
         </div>
+      ) : isMobile ? (
+        <div className="overflow-y-auto h-full px-4 pt-16 pb-6">
+          <div className="mb-6 flex items-center gap-2 px-3 py-2 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <Search size={11} style={{ color: 'rgba(222,219,200,0.4)' }} />
+            <input
+              value={nodeSearch}
+              onChange={e => setNodeSearch(e.target.value)}
+              placeholder="Search pages..."
+              className="bg-transparent outline-none text-[12px] flex-1"
+              style={{ color: '#DEDBC8' }}
+            />
+            {nodeSearch && (
+              <button onClick={() => setNodeSearch('')}>
+                <X size={11} style={{ color: 'rgba(222,219,200,0.4)' }} />
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {graphData.nodes
+              .filter(n => !nodeSearch || n.title.toLowerCase().includes(nodeSearch.toLowerCase()))
+              .sort((a, b) => (b.connections || 0) - (a.connections || 0))
+              .map(node => (
+                <Link key={node.id} href={`/wiki/${node.slug}`}>
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: TYPE_COLORS[node.type] || DEFAULT_COLOR }} />
+                    <span className="text-sm flex-1 truncate" style={{ color: '#E1E0CC' }}>{node.title}</span>
+                    {node.connections > 0 && (
+                      <span className="text-[10px]" style={{ color: 'rgba(222,219,200,0.25)' }}>
+                        {node.connections}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+          </div>
+        </div>
       ) : (
         <ForceGraph2D
+          ref={fgRef}
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
@@ -241,14 +302,15 @@ export default function GraphPage() {
           onNodeClick={handleNodeClick as unknown as (node: object) => void}
           onBackgroundClick={handleBackgroundClick}
           onLinkHover={handleLinkHover as unknown as (link: object | null) => void}
-          cooldownTicks={100}
-          d3AlphaDecay={0.02}
-          d3VelocityDecay={0.3}
+          cooldownTicks={200}
+          warmupTicks={50}
+          d3AlphaDecay={0.015}
+          d3VelocityDecay={0.25}
         />
       )}
 
       {/* TOP: Node search */}
-      {!loading && rawData.nodes.length > 0 && (
+      {!loading && rawData.nodes.length > 0 && !isMobile && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
           <div
             className="flex items-center gap-2 px-4 py-2 rounded-full"
@@ -288,7 +350,7 @@ export default function GraphPage() {
       )}
 
       {/* Legend + Type filters */}
-      {!loading && rawData.nodes.length > 0 && (
+      {!loading && rawData.nodes.length > 0 && !isMobile && (
         <div
           className="absolute top-4 right-4 rounded-xl p-3"
           style={{
