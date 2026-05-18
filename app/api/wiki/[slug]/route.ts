@@ -44,21 +44,29 @@ export async function GET(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 })
     }
 
-    // chunk_content is the full raw JSON document — extract markdown from it
     const extractMarkdown = (chunkContent: string): string => {
+      if (!chunkContent) return ''
       try {
         const doc = JSON.parse(chunkContent)
-        return doc?.content?.markdown ?? ''
+        const item = Array.isArray(doc) ? doc[0] : doc
+        return item?.content?.markdown || item?.markdown || ''
       } catch {
-        return chunkContent
+        // Regex fallback: extract "markdown": "..." even from truncated/malformed JSON
+        const m = chunkContent.match(/"markdown"\s*:\s*"((?:[^"\\]|\\.)*)/)
+        if (m?.[1]) {
+          try { return JSON.parse(`"${m[1]}"`) } catch { return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') }
+        }
+        // Not JSON-shaped → treat as plain text content
+        return chunkContent.startsWith('{') || chunkContent.startsWith('[') ? '' : chunkContent
       }
     }
 
     const chunks = (searchResponse.chunks ?? []).filter((c) => c.source_id === pageSource.id)
     const firstChunk = chunks[0]
     const parsedDoc = firstChunk ? (() => { try { return JSON.parse(firstChunk.chunk_content) } catch { return null } })() : null
+    const parsedItem = Array.isArray(parsedDoc) ? parsedDoc[0] : parsedDoc
 
-    const content = parsedDoc?.content?.markdown
+    const content = (parsedItem?.content?.markdown || parsedItem?.markdown)
       || chunks.map((c) => extractMarkdown(c.chunk_content)).filter(Boolean).join('\n\n')
       || ''
 
@@ -79,10 +87,10 @@ export async function GET(
 
     const page = {
       slug: (meta.slug as string) || pageSource.id,
-      title: parsedDoc?.title || pageSource.title || 'Unknown Title',
+      title: parsedItem?.title || parsedDoc?.title || pageSource.title || 'Unknown Title',
       type: (meta.category as string) || 'concept',
       summary: (meta.summary as string) || '',
-      content,
+      content: content.replace(/^#\s+.+\n+/, ''),  // strip leading h1 — already shown in hero
       sources: pageSources,
       created_at: parsedDoc?.timestamp || pageSource.timestamp || '',
     }

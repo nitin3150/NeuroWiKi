@@ -158,9 +158,27 @@
   background-size: 200px 200px;
 }
 
-.wiki-prose h2 { font-size: 1.25rem; font-weight: 700; color: #E1E0CC; margin: 1.5rem 0 0.5rem; border-left: 2px solid rgba(222,219,200,0.2); padding-left: 0.75rem; }
-.wiki-prose h3 { font-size: 1rem; font-weight: 700; color: #DEDBC8; margin: 1rem 0 0.5rem; }
-.wiki-prose p { color: rgba(222,219,200,0.7); line-height: 1.8; margin-bottom: 1rem; font-size: 0.9rem; }
+.wiki-prose h1 { font-size: 1.6rem; font-weight: 700; color: #E1E0CC; margin: 2rem 0 0.75rem; line-height: 1.2; }
+.wiki-prose h2 { font-size: 1.2rem; font-weight: 700; color: #E1E0CC; margin: 2rem 0 0.6rem; border-left: 2px solid rgba(222,219,200,0.2); padding-left: 0.75rem; }
+.wiki-prose h3 { font-size: 1rem; font-weight: 600; color: #DEDBC8; margin: 1.5rem 0 0.4rem; }
+.wiki-prose h4 { font-size: 0.9rem; font-weight: 600; color: rgba(222,219,200,0.7); margin: 1rem 0 0.3rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.wiki-prose p { color: rgba(222,219,200,0.75); line-height: 1.85; margin-bottom: 1.1rem; font-size: 0.925rem; }
+.wiki-prose strong { color: #E1E0CC; font-weight: 600; }
+.wiki-prose em { color: rgba(222,219,200,0.85); font-style: italic; }
 .wiki-prose a { color: #DEDBC8; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(222,219,200,0.3); }
 .wiki-prose a:hover { text-decoration-color: rgba(222,219,200,0.8); }
-.wiki-prose code { background: #111; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; color: #DEDBC8; }
+.wiki-prose ul { list-style: none; margin: 0.75rem 0 1.1rem; padding: 0; }
+.wiki-prose ul li { color: rgba(222,219,200,0.75); font-size: 0.925rem; line-height: 1.8; padding-left: 1.25rem; margin-bottom: 0.35rem; position: relative; }
+.wiki-prose ul li::before { content: '—'; position: absolute; left: 0; color: rgba(222,219,200,0.25); }
+.wiki-prose ol { counter-reset: li; margin: 0.75rem 0 1.1rem; padding: 0; }
+.wiki-prose ol li { color: rgba(222,219,200,0.75); font-size: 0.925rem; line-height: 1.8; padding-left: 1.75rem; margin-bottom: 0.35rem; position: relative; counter-increment: li; }
+.wiki-prose ol li::before { content: counter(li) '.'; position: absolute; left: 0; color: rgba(222,219,200,0.35); font-size: 0.8rem; font-weight: 600; top: 0.05rem; }
+.wiki-prose blockquote { border-left: 2px solid rgba(222,219,200,0.15); margin: 1.25rem 0; padding: 0.5rem 1rem; }
+.wiki-prose blockquote p { color: rgba(222,219,200,0.5); font-style: italic; margin-bottom: 0; }
+.wiki-prose hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 2rem 0; }
+.wiki-prose pre { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 1rem 1.25rem; margin: 1.25rem 0; overflow-x: auto; }
+.wiki-prose pre code { background: none; padding: 0; font-size: 0.82rem; color: rgba(222,219,200,0.8); }
+.wiki-prose code { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); padding: 0.1rem 0.4rem; border-radius: 5px; font-size: 0.82rem; color: #DEDBC8; }
+.wiki-prose table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.875rem; }
+.wiki-prose th { color: rgba(222,219,200,0.5); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
+.wiki-prose td { color: rgba(222,219,200,0.7); padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); line-height: 1.6; }
