@@ -3,7 +3,7 @@ import { google } from '@ai-sdk/google'
 import { z } from 'zod'
 import { hydra, ensureTenant, waitForIngestion } from '../hydra'
 import { upsertPageHealth, upsertPageLinks, getAllPages } from '../db-helpers'
-import { findExistingPage, absorbIntoExisting } from './absorb-agent'
+import { findExistingPage, absorbIntoExisting, enrichRelatedPage } from './absorb-agent'
 
 export interface IngestResult {
   pagesCreated: number
@@ -209,6 +209,36 @@ Return JSON with a "pages" key containing an array. Each page must include:
     } catch (error: any) {
       console.error(`Failed to ingest page ${page.slug}:`, error?.body ?? error?.message)
     }
+  }
+
+  // Step 4 — Enrich related existing pages with new source knowledge
+  // Limit to 2 related pages max to avoid rate limits
+  const newSlugs = new Set(pages.map(p => p.slug))
+  const enriched = new Set<string>()
+
+  try {
+    for (const newPage of pages.slice(0, 2)) {
+      const related = await hydra.recall.fullRecall({
+        tenant_id: tenantId,
+        query: newPage.title,
+        max_results: 4,
+      }) as any
+
+      const relatedSlugs: string[] = (related?.sources ?? [])
+        .map((s: any) => s.id)
+        .filter((id: string) => !newSlugs.has(id) && !enriched.has(id))
+        .slice(0, 2)
+
+      const newPagesSummary = pages.map(p => `${p.title}: ${p.content.slice(0, 200)}`).join('\n\n')
+      const allSlugs = existingPages.map(p => p.slug)
+
+      for (const relatedSlug of relatedSlugs) {
+        const ok = await enrichRelatedPage(relatedSlug, sourceText, newPagesSummary, allSlugs, tenantId)
+        if (ok) enriched.add(relatedSlug)
+      }
+    }
+  } catch (e) {
+    console.warn('[ingest] Related page enrichment pass failed:', e)
   }
 
   return { pagesCreated, pages }

@@ -30,35 +30,66 @@ export async function findExistingPage(
       query: slug,
       operator: 'and',
     }) as any
+
     const sources: any[] = res?.sources ?? []
-    const match = sources.find(
-      (s) => (s.additional_metadata?.slug ?? s.id) === slug
-    )
+    const chunks: any[] = res?.chunks ?? []
+
+    // 1. Direct ID match
+    let match = sources.find((s) => s.id === slug)
+
+    // 2. additional_metadata.slug match (if populated)
+    if (!match) {
+      match = sources.find((s) => s.additional_metadata?.slug === slug)
+    }
+
+    // 3. Parse chunk JSON for document_metadata.slug (most reliable)
+    if (!match) {
+      const chunkMatch = chunks.find((c: any) => {
+        try {
+          const parsed = JSON.parse(c.chunk_content)
+          return parsed?.document_metadata?.slug === slug
+        } catch {
+          return c.source_id === slug
+        }
+      })
+      if (chunkMatch) {
+        match = sources.find((s) => s.id === chunkMatch.source_id) ?? {
+          id: chunkMatch.source_id,
+          title: chunkMatch.source_title ?? '',
+          additional_metadata: null,
+        }
+      }
+    }
+
     if (!match) return null
 
-    const meta = match.additional_metadata ?? {}
-    const rawSentences = meta.sourceSentences
-    const sourceSentences: string[] = Array.isArray(rawSentences) ? rawSentences : []
-
-    // Content lives in chunks, not in the source object itself
-    const chunks: any[] = res?.chunks ?? []
+    // Extract content + metadata from chunk JSON
     const matchChunk = chunks.find((c: any) => c.source_id === match.id)
     let content = ''
+    let meta: any = {}
+
     if (matchChunk?.chunk_content) {
       try {
         const parsed = JSON.parse(matchChunk.chunk_content)
         content = parsed?.content?.markdown ?? matchChunk.chunk_content
+        meta = parsed?.document_metadata ?? {}
       } catch {
         content = matchChunk.chunk_content
       }
     }
 
+    const sourceSentences: string[] = Array.isArray(meta.sourceSentences)
+      ? meta.sourceSentences
+      : Array.isArray(match.additional_metadata?.sourceSentences)
+      ? match.additional_metadata.sourceSentences
+      : []
+
     return {
       slug,
-      title: match.title ?? '',
+      title: match.title ?? meta.title ?? '',
       content,
-      summary: meta.summary ?? '',
-      type: meta.category ?? 'concept',
+      summary: meta.summary ?? match.additional_metadata?.summary ?? '',
+      type: meta.category ?? match.additional_metadata?.category ?? 'concept',
       sourceSentences,
     }
   } catch {
@@ -124,5 +155,51 @@ Return unified content, updated summary, and combined sourceSentences.`,
     content: object.content,
     summary: object.summary,
     sourceSentences: object.sourceSentences,
+  }
+}
+
+export async function enrichRelatedPage(
+  relatedSlug: string,
+  newSourceText: string,
+  newPagesSummary: string,
+  availableSlugs: string[],
+  tenantId: string = 'default'
+): Promise<boolean> {
+  try {
+    const existing = await findExistingPage(relatedSlug, tenantId)
+    if (!existing || !existing.content) return false
+
+    const merged = await absorbIntoExisting(
+      existing,
+      { title: '', content: newPagesSummary, sourceSentences: [] },
+      newSourceText,
+      availableSlugs
+    )
+
+    await hydra.upload.knowledge({
+      tenant_id: tenantId,
+      upsert: true,
+      app_knowledge: JSON.stringify([{
+        tenant_id: tenantId,
+        sub_tenant_id: 'default',
+        id: relatedSlug,
+        title: existing.title,
+        type: 'document',
+        content: { markdown: merged.content },
+        document_metadata: {
+          category: existing.type,
+          summary: merged.summary,
+          sourceSentences: merged.sourceSentences,
+          verified: true,
+          verifiedAt: new Date().toISOString(),
+          slug: relatedSlug,
+        },
+      }]),
+    })
+
+    return true
+  } catch (e) {
+    console.warn(`[absorb] Failed to enrich related page ${relatedSlug}:`, e)
+    return false
   }
 }
