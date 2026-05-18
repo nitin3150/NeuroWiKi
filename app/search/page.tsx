@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Search, Sparkles, Clock, Copy, Check, Clipboard } from 'lucide-react'
+import { Search, Sparkles, Clock, Copy, Check, Clipboard, BookmarkPlus, ArrowRight, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
@@ -33,6 +33,8 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [history, setHistory] = useState<string[]>([])
+  const [savingToWiki, setSavingToWiki] = useState(false)
+  const [savedSlug, setSavedSlug] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Load pages + history
@@ -69,6 +71,7 @@ export default function SearchPage() {
     setQuery(q)
     setLoading(true)
     setAnswer('')
+    setSavedSlug(null)
     saveToHistory(q)
 
     try {
@@ -100,6 +103,26 @@ export default function SearchPage() {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSaveToWiki = async () => {
+    if (!answer || !query || savingToWiki) return
+    setSavingToWiki(true)
+    try {
+      const res = await fetch('/api/wiki/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: query, answer })
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setSavedSlug(data.slug)
+      toast.success('Successfully compiled into Wiki!')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to compile to Wiki')
+    } finally {
+      setSavingToWiki(false)
     }
   }
 
@@ -306,6 +329,45 @@ export default function SearchPage() {
                 </p>
               )}
             </div>
+
+            {!loading && answer && (
+              <FadeUp delay={0.2} className="mt-4">
+                <div className="bg-[#111] border border-white/5 rounded-2xl p-5 flex flex-col gap-3 relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/5 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-medium mb-1" style={{ color: '#E1E0CC' }}>
+                        Save as Wiki Page
+                      </p>
+                      <p className="text-[11px] leading-relaxed max-w-[80%]" style={{ color: 'rgba(222,219,200,0.45)' }}>
+                        Compile this Q&A into a permanent node in your knowledge graph.
+                      </p>
+                    </div>
+                    {savedSlug ? (
+                      <Link
+                        href={`/wiki/${savedSlug}`}
+                        className="flex items-center gap-1.5 bg-emerald-950/40 text-emerald-400 border border-emerald-900/50 px-4 py-2 rounded-full text-[11px] font-medium tracking-wide hover:bg-emerald-900/40 transition-colors"
+                      >
+                        View Page <ArrowRight size={12} />
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={handleSaveToWiki}
+                        disabled={savingToWiki}
+                        className="flex items-center gap-2 bg-[#DEDBC8] text-black px-4 py-2 rounded-full text-[11px] font-medium tracking-wide hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        {savingToWiki ? (
+                          <><Loader2 size={12} className="animate-spin" /> Saving...</>
+                        ) : (
+                          <><BookmarkPlus size={13} /> Compile to Wiki</>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </FadeUp>
+            )}
 
             {answer && (
               <FadeUp delay={0.2}>
