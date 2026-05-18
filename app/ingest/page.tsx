@@ -22,6 +22,8 @@ const ACCEPTED = '.pdf,.txt,.md,.docx'
 
 export default function IngestPage() {
   const [input, setInput] = useState('')
+  const [tab, setTab] = useState<'single' | 'bulk'>('single')
+  const [bulkUrls, setBulkUrls] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -142,6 +144,37 @@ export default function IngestPage() {
     }
   }
 
+  const handleBulkSubmit = async () => {
+    const urls = bulkUrls.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'))
+    if (urls.length === 0) { toast.error('No valid URLs found'); return }
+    if (urls.length > 10) { toast.error('Maximum 10 URLs at once'); return }
+    
+    setLoading(true)
+    const allResults: ResultPage[] = []
+    
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i]
+      toast.loading(`Processing ${i + 1}/${urls.length}: ${new URL(url).hostname}`, { id: 'bulk' })
+      try {
+        const res = await fetch('/api/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        })
+        const data = await res.json()
+        allResults.push(...(data.pages || []))
+      } catch {
+        toast.error(`Failed: ${url}`)
+      }
+    }
+    
+    toast.dismiss('bulk')
+    toast.success(`Done: ${allResults.length} pages created across ${urls.length} sources`)
+    setResults(allResults)
+    setDone(true)
+    setLoading(false)
+  }
+
   const reset = () => {
     setDone(false)
     setInput('')
@@ -167,78 +200,113 @@ export default function IngestPage() {
           </FadeUp>
         </div>
 
-        <FadeUp delay={0.5}>
-          {/* Drop zone wrapper */}
-          <div
-            onDragOver={e => { e.preventDefault(); setDragging(true) }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className="relative rounded-2xl transition-all duration-200"
-            style={{
-              border: `1px solid ${dragging ? 'rgba(222,219,200,0.4)' : 'rgba(255,255,255,0.08)'}`,
-              background: dragging ? 'rgba(222,219,200,0.03)' : '#0a0a0a',
-            }}
-          >
-            {files.length > 0 ? (
-              /* File chips list */
-              <div className="px-5 py-4 space-y-2">
-                {files.map((f, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <Paperclip size={12} style={{ color: 'rgba(222,219,200,0.4)' }} />
-                    <span className="text-sm flex-1 truncate" style={{ color: '#DEDBC8' }}>{f.name}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 shrink-0" style={{ color: 'rgba(222,219,200,0.35)' }}>
-                      {(f.size / 1024).toFixed(0)} KB
-                    </span>
-                    <button onClick={() => removeFile(i)}>
-                      <X size={12} style={{ color: 'rgba(222,219,200,0.35)' }} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder="Paste text, a URL (https://...), or drop a file below..."
-                className="w-full bg-transparent px-5 pt-5 pb-3 text-sm outline-none resize-none min-h-[180px]"
-                style={{ color: 'rgba(222,219,200,0.8)', lineHeight: 1.7 }}
-              />
-            )}
-
-            {/* File drop footer */}
-            <div
-              className="border-t px-5 py-3 flex items-center justify-between"
-              style={{ borderColor: 'rgba(255,255,255,0.05)' }}
-            >
-              <span className="text-[10px] tracking-wider" style={{ color: 'rgba(222,219,200,0.2)' }}>
-                {dragging ? 'Drop to upload' : 'PDF · TXT · MD · DOCX'}
-              </span>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase transition-opacity hover:opacity-100"
-                style={{ color: 'rgba(222,219,200,0.35)' }}
-              >
-                <Paperclip size={10} /> Upload file
-              </button>
+        <FadeUp delay={0.45}>
+          <div className="flex justify-center mb-6">
+            <div className="flex gap-1 p-1 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              {(['single', 'bulk'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setTab(m)}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200"
+                  style={{
+                    background: tab === m ? '#DEDBC8' : 'transparent',
+                    color: tab === m ? '#000' : 'rgba(222,219,200,0.4)',
+                  }}
+                >
+                  {m === 'single' ? 'Text / File' : 'Bulk URLs'}
+                </button>
+              ))}
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED}
-              multiple
-              className="hidden"
-              onChange={e => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = '' }}
-            />
           </div>
+        </FadeUp>
+
+        <FadeUp delay={0.5}>
+          {tab === 'single' ? (
+            /* Drop zone wrapper */
+            <div
+              onDragOver={e => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className="relative rounded-2xl transition-all duration-200"
+              style={{
+                border: `1px solid ${dragging ? 'rgba(222,219,200,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                background: dragging ? 'rgba(222,219,200,0.03)' : '#0a0a0a',
+              }}
+            >
+              {files.length > 0 ? (
+                /* File chips list */
+                <div className="px-5 py-4 space-y-2">
+                  {files.map((f, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Paperclip size={12} style={{ color: 'rgba(222,219,200,0.4)' }} />
+                      <span className="text-sm flex-1 truncate" style={{ color: '#DEDBC8' }}>{f.name}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 shrink-0" style={{ color: 'rgba(222,219,200,0.35)' }}>
+                        {(f.size / 1024).toFixed(0)} KB
+                      </span>
+                      <button onClick={() => removeFile(i)}>
+                        <X size={12} style={{ color: 'rgba(222,219,200,0.35)' }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Paste text, a URL (https://...), or drop a file below..."
+                  className="w-full bg-transparent px-5 pt-5 pb-3 text-sm outline-none resize-none min-h-[180px]"
+                  style={{ color: 'rgba(222,219,200,0.8)', lineHeight: 1.7 }}
+                />
+              )}
+
+              {/* File drop footer */}
+              <div
+                className="border-t px-5 py-3 flex items-center justify-between"
+                style={{ borderColor: 'rgba(255,255,255,0.05)' }}
+              >
+                <span className="text-[10px] tracking-wider" style={{ color: 'rgba(222,219,200,0.2)' }}>
+                  {dragging ? 'Drop to upload' : 'PDF · TXT · MD · DOCX'}
+                </span>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 text-[10px] tracking-wider uppercase transition-opacity hover:opacity-100"
+                  style={{ color: 'rgba(222,219,200,0.35)' }}
+                >
+                  <Paperclip size={10} /> Upload file
+                </button>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED}
+                multiple
+                className="hidden"
+                onChange={e => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = '' }}
+              />
+            </div>
+          ) : (
+            <div>
+              <textarea
+                value={bulkUrls}
+                onChange={e => setBulkUrls(e.target.value)}
+                placeholder={"https://example.com/article-1\nhttps://example.com/article-2\nhttps://example.com/article-3"}
+                className="w-full bg-[#0a0a0a] border border-white/8 rounded-2xl p-5 text-sm outline-none min-h-[160px] resize-none font-mono focus:border-white/20 transition"
+                style={{ color: 'rgba(222,219,200,0.7)', lineHeight: 1.8 }}
+              />
+              <p className="text-[10px] mt-2" style={{ color: 'rgba(222,219,200,0.25)' }}>
+                One URL per line. Ingested in parallel.
+              </p>
+            </div>
+          )}
         </FadeUp>
 
         {/* Submit / Progress */}
         <FadeUp delay={0.6}>
           {!loading && (
             <button
-              onClick={handleSubmit}
-              disabled={!files.length && !input.trim()}
+              onClick={tab === 'bulk' ? handleBulkSubmit : handleSubmit}
+              disabled={tab === 'single' ? (!files.length && !input.trim()) : !bulkUrls.trim()}
               className="group mt-4 w-full flex items-center justify-between bg-[#DEDBC8] rounded-full px-5 py-3 transition-all duration-300 hover:opacity-90 disabled:opacity-30"
             >
               <span className="text-black font-medium text-sm">Add to Wiki</span>
