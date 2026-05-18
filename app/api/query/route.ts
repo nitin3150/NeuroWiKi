@@ -81,7 +81,7 @@ Keep answers concise and factual.`
     model: google('gemini-2.0-flash'),
     system: systemPrompt,
     prompt: `Question: ${question}\n\nWiki context:\n${context}`,
-    maxTokens: 600,
+    maxOutputTokens: 600,
   })
 
   return stream.toTextStreamResponse()

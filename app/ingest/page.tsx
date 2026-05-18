@@ -4,10 +4,11 @@ import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
 import Link from 'next/link'
-import { ArrowRight, Check, Circle, Loader2 } from 'lucide-react'
+import { ArrowRight, Check, Circle, Loader2, Upload } from 'lucide-react'
 
 type Step = { label: string; status: 'pending' | 'active' | 'done' }
 type ResultPage = { slug: string; title: string; type: string; isNew: boolean }
+type Tab = 'text' | 'url' | 'file'
 
 const INITIAL_STEPS: Step[] = [
   { label: 'Reading source...', status: 'pending' },
@@ -17,30 +18,40 @@ const INITIAL_STEPS: Step[] = [
   { label: 'Indexing in progress...', status: 'pending' },
 ]
 
+const TAB_LABELS: Record<Tab, string> = {
+  text: 'Paste Text',
+  url: 'From URL',
+  file: 'Upload File',
+}
+
 export default function IngestPage() {
-  const [tab, setTab] = useState<'text' | 'url'>('text')
+  const [tab, setTab] = useState<Tab>('text')
   const [text, setText] = useState('')
   const [url, setUrl] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [steps, setSteps] = useState<Step[]>(INITIAL_STEPS)
   const [results, setResults] = useState<ResultPage[]>([])
   const [done, setDone] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const advanceStep = (index: number) => {
     setSteps(prev => prev.map((s, i) => ({
       ...s,
-      status: i < index ? 'done' : i === index ? 'active' : 'pending'
+      status: i < index ? 'done' : i === index ? 'active' : 'pending',
     })))
   }
 
-  const handleSubmit = async () => {
+  // ── Text / URL streaming submit ───────────────────────────────────────────
+  const handleTextUrlSubmit = async () => {
     const content = tab === 'text' ? text : url
     if (!content.trim()) return
 
     setLoading(true)
     setDone(false)
     setWarning(null)
+    setErrorMsg(null)
     setResults([])
     setSteps(INITIAL_STEPS.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending' })))
 
@@ -56,12 +67,18 @@ export default function IngestPage() {
 
       advanceStep(3)
       setTimeout(() => advanceStep(4), 1000)
-      
+
       const textResponse = await res.text()
       const lines = textResponse.split('\n').filter(Boolean)
       const finalLine = lines[lines.length - 1]
       const data = JSON.parse(finalLine)
-      
+
+      if (data.error) {
+        setErrorMsg(data.error)
+        setLoading(false)
+        return
+      }
+
       setTimeout(() => {
         setSteps(prev => prev.map(s => ({ ...s, status: 'done' })))
         setResults(data.pages || [])
@@ -71,9 +88,66 @@ export default function IngestPage() {
       }, 600)
     } catch (e) {
       console.error(e)
+      setErrorMsg('An unexpected error occurred. Please try again.')
       setLoading(false)
     }
   }
+
+  // ── File upload submit ────────────────────────────────────────────────────
+  const handleFileSubmit = async () => {
+    if (!file) return
+
+    setLoading(true)
+    setDone(false)
+    setWarning(null)
+    setErrorMsg(null)
+    setResults([])
+    setSteps(INITIAL_STEPS.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending' })))
+
+    try {
+      setTimeout(() => advanceStep(1), 600)
+      setTimeout(() => advanceStep(2), 1400)
+
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/ingest/pdf', { method: 'POST', body: formData })
+
+      advanceStep(3)
+      setTimeout(() => advanceStep(4), 800)
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setErrorMsg(data.error || 'Failed to process file')
+        setLoading(false)
+        return
+      }
+
+      setTimeout(() => {
+        setSteps(prev => prev.map(s => ({ ...s, status: 'done' })))
+        setResults(data.pages || [])
+        if (data.warning) setWarning(data.warning)
+        setDone(true)
+        setLoading(false)
+      }, 600)
+    } catch (e) {
+      console.error(e)
+      setErrorMsg('An unexpected error occurred. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = () => {
+    if (tab === 'file') return handleFileSubmit()
+    return handleTextUrlSubmit()
+  }
+
+  const canSubmit =
+    !loading && !done &&
+    ((tab === 'text' && text.trim()) ||
+     (tab === 'url' && url.trim()) ||
+     (tab === 'file' && file !== null))
 
   return (
     <div className="bg-black min-h-screen flex flex-col items-center pt-16 px-4 pb-20">
@@ -87,7 +161,7 @@ export default function IngestPage() {
           </h1>
           <FadeUp delay={0.4}>
             <p className="text-base mt-4" style={{ color: 'rgba(222,219,200,0.45)' }}>
-              Paste text or a URL. The AI does the rest.
+              Paste text, drop a URL, or upload a file. The AI does the rest.
             </p>
           </FadeUp>
         </div>
@@ -95,7 +169,7 @@ export default function IngestPage() {
         {/* Tabs */}
         <FadeUp delay={0.5}>
           <div className="flex gap-6 mb-6 border-b border-white/5">
-            {(['text', 'url'] as const).map(t => (
+            {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -104,7 +178,7 @@ export default function IngestPage() {
                 }`}
                 style={{ color: tab === t ? '#DEDBC8' : 'rgba(222,219,200,0.35)' }}
               >
-                {t === 'text' ? 'Paste Text' : 'From URL'}
+                {TAB_LABELS[t]}
               </button>
             ))}
           </div>
@@ -112,7 +186,7 @@ export default function IngestPage() {
 
         {/* Input */}
         <FadeUp delay={0.6}>
-          {tab === 'text' ? (
+          {tab === 'text' && (
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
@@ -120,7 +194,9 @@ export default function IngestPage() {
               className="w-full bg-[#0a0a0a] border border-white/8 rounded-2xl p-5 text-sm outline-none resize-none min-h-[220px] transition-all duration-200 focus:border-white/20"
               style={{ color: 'rgba(222,219,200,0.8)', lineHeight: 1.7 }}
             />
-          ) : (
+          )}
+
+          {tab === 'url' && (
             <input
               value={url}
               onChange={e => setUrl(e.target.value)}
@@ -129,11 +205,64 @@ export default function IngestPage() {
               style={{ color: 'rgba(222,219,200,0.8)' }}
             />
           )}
+
+          {tab === 'file' && (
+            <div
+              className="border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 hover:bg-white/[0.02]"
+              style={{ borderColor: file ? 'rgba(222,219,200,0.4)' : 'rgba(255,255,255,0.08)' }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault()
+                const dropped = e.dataTransfer.files[0]
+                if (dropped) setFile(dropped)
+              }}
+              onClick={() => document.getElementById('file-input')?.click()}
+            >
+              <input
+                id="file-input"
+                type="file"
+                accept=".pdf,.txt,.md"
+                className="hidden"
+                onChange={e => setFile(e.target.files?.[0] || null)}
+              />
+              {file ? (
+                <div>
+                  <p className="text-sm font-medium" style={{ color: '#E1E0CC' }}>{file.name}</p>
+                  <p className="text-[10px] mt-1" style={{ color: 'rgba(222,219,200,0.4)' }}>
+                    {(file.size / 1024).toFixed(1)} KB · click to change
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <Upload
+                    size={24}
+                    className="mx-auto mb-3"
+                    style={{ color: 'rgba(222,219,200,0.3)' }}
+                  />
+                  <p className="text-sm" style={{ color: 'rgba(222,219,200,0.5)' }}>
+                    Drop PDF, TXT, or MD file here
+                  </p>
+                  <p className="text-[10px] mt-1" style={{ color: 'rgba(222,219,200,0.25)' }}>
+                    or click to browse
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </FadeUp>
+
+        {/* Error message */}
+        {errorMsg && !loading && (
+          <FadeUp delay={0}>
+            <div className="mt-4 bg-red-950/30 border border-red-900/50 rounded-xl p-3">
+              <p className="text-[11px] text-red-300/80 leading-relaxed">{errorMsg}</p>
+            </div>
+          </FadeUp>
+        )}
 
         {/* Submit / Progress */}
         <FadeUp delay={0.7}>
-          {!loading && !done && (
+          {canSubmit && (
             <button
               onClick={handleSubmit}
               className="group mt-4 w-full flex items-center justify-between bg-[#DEDBC8] rounded-full px-5 py-3 transition-all duration-300 hover:opacity-90"
@@ -157,7 +286,7 @@ export default function IngestPage() {
                       ? 'rgba(222,219,200,0.3)'
                       : step.status === 'active'
                       ? '#DEDBC8'
-                      : 'rgba(222,219,200,0.2)'
+                      : 'rgba(222,219,200,0.2)',
                   }}>
                     {step.label}
                   </span>
@@ -176,9 +305,7 @@ export default function IngestPage() {
             {warning && (
               <div className="mb-4 bg-amber-950/30 border border-amber-900/50 rounded-xl p-3 flex items-start gap-3">
                 <span className="text-amber-500 text-xs mt-0.5">⚠️</span>
-                <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                  {warning}
-                </p>
+                <p className="text-[11px] text-amber-200/80 leading-relaxed">{warning}</p>
               </div>
             )}
             <div className="space-y-2">
@@ -201,7 +328,7 @@ export default function IngestPage() {
             </div>
             <FadeUp delay={0.3}>
               <button
-                onClick={() => { setDone(false); setText(''); setUrl('') }}
+                onClick={() => { setDone(false); setText(''); setUrl(''); setFile(null); setErrorMsg(null) }}
                 className="mt-6 text-[11px] tracking-wider uppercase transition-opacity hover:opacity-100"
                 style={{ color: 'rgba(222,219,200,0.35)' }}
               >
@@ -210,6 +337,21 @@ export default function IngestPage() {
             </FadeUp>
           </div>
         )}
+
+        {done && results.length === 0 && (
+          <FadeUp delay={0}>
+            <div className="mt-6 bg-amber-950/30 border border-amber-900/50 rounded-xl p-4 text-center">
+              <p className="text-sm text-amber-200/80">No pages were generated. The source may be too short or the AI couldn&apos;t extract enough facts.</p>
+              <button
+                onClick={() => { setDone(false); setErrorMsg(null) }}
+                className="mt-3 text-[11px] tracking-wider uppercase text-amber-400/60 hover:text-amber-400 transition-colors"
+              >
+                Try again
+              </button>
+            </div>
+          </FadeUp>
+        )}
+
       </div>
     </div>
   )
