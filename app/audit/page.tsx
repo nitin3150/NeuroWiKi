@@ -26,6 +26,8 @@ export default function AuditPage() {
     syncWarning: string | null
     stale: Array<{ slug: string; title: string; last_validated: string }>
     flagged: Array<{ slug: string; title: string; stale_reason: string; confidence: number }>
+    missingPages: string[]
+    missingCount: number
   } | null>(null)
 
   const [lint, setLint] = useState<LintReport | null>(null)
@@ -170,6 +172,37 @@ export default function AuditPage() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Missing pages */}
+          {audit.missingCount > 0 && (
+            <FadeUp>
+              <div className="mb-12">
+                <p className="text-[9px] tracking-[0.3em] uppercase mb-4"
+                  style={{ color: 'rgba(222,219,200,0.3)' }}>
+                  MISSING PAGES — {audit.missingCount} stubs
+                </p>
+                <p className="text-[11px] mb-4" style={{ color: 'rgba(222,219,200,0.4)' }}>
+                  These [[wikilinks]] exist in your wiki but have no page yet.
+                  Add sources about these topics to fill them in.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {audit.missingPages.map((slug: string) => (
+                    <div key={slug}
+                      className="flex items-center gap-2 bg-[#111] rounded-full px-3 py-1.5">
+                      <span className="text-[10px]" style={{ color: 'rgba(222,219,200,0.5)' }}>
+                        {slug.replace(/-/g, ' ')}
+                      </span>
+                      <Link href={`/ingest?prefill=${encodeURIComponent(slug.replace(/-/g, ' '))}`}
+                        className="text-[9px] hover:opacity-100 transition-opacity"
+                        style={{ color: 'rgba(222,219,200,0.3)' }}>
+                        + Add →
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </FadeUp>
           )}
         </>
       )}

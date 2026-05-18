@@ -33,6 +33,20 @@ export async function GET(req: NextRequest) {
     if (!is404) console.error('Failed to reconcile with HydraDB', e)
   }
   
+  // Find [[wikilinks]] that don't have pages
+  const pageSlugSet = new Set(all.map(p => p.slug))
+  const missingPages: string[] = []
+  
+  for (const page of all) {
+    const matches = (page.content || '').matchAll(/\[\[([^\]]+)\]\]/g)
+    for (const match of matches) {
+      const linkedSlug = match[1].toLowerCase().replace(/\s+/g, '-')
+      if (!pageSlugSet.has(linkedSlug) && !missingPages.includes(linkedSlug)) {
+        missingPages.push(linkedSlug)
+      }
+    }
+  }
+
   return Response.json({
     totalPages: all.length,
     stalePages: stale.length,
@@ -41,5 +55,7 @@ export async function GET(req: NextRequest) {
     syncWarning,
     stale: stale.map(p => ({ slug: p.slug, title: p.title, last_validated: p.last_validated })),
     flagged: flagged.map(p => ({ slug: p.slug, title: p.title, stale_reason: p.stale_reason, confidence: p.confidence })),
+    missingPages: missingPages.slice(0, 20),
+    missingCount: missingPages.length,
   })
 }
