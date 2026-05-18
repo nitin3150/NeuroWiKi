@@ -17,8 +17,8 @@ export function WordsPullUp({ text, className = '', style = {}, delay = 0 }: Pro
   return (
     <span
       ref={ref}
-      className={`inline-flex flex-wrap ${className}`}
-      style={{ gap: '0.25em', ...style }}
+      className={`inline-block ${className}`}
+      style={style}
     >
       {words.map((word, i) => (
         <span key={i} style={{ overflow: 'hidden', display: 'inline-block' }}>
@@ -32,7 +32,7 @@ export function WordsPullUp({ text, className = '', style = {}, delay = 0 }: Pro
             }}
             style={{ display: 'inline-block' }}
           >
-            {word}
+            {word}{i < words.length - 1 ? '\u00A0' : ''}
           </motion.span>
         </span>
       ))}

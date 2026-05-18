@@ -35,7 +35,7 @@ export default function Home() {
           
           {/* Video — BOTTOM layer */}
           <video
-            autoPlay loop muted playsInline preload="metadata"
+            autoPlay loop muted playsInline preload="auto"
             poster="/hero-poster.jpg"
             className="absolute inset-0 w-full h-full object-cover object-center"
             src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_170732_8a9ccda6-5cff-4628-b164-059c500a2b41.mp4"
@@ -58,7 +58,7 @@ export default function Home() {
                 { label: 'Add Source', href: '/ingest' },
                 { label: 'Search', href: '/search' },
                 { label: 'Graph', href: '/graph' },
-                { label: 'About', href: '/' },
+                { label: 'About', href: '/about' },
               ].map(({ label, href }) => (
                 <Link
                   key={label}
@@ -132,14 +132,12 @@ export default function Home() {
                 <FadeUp delay={0.7}>
                   <Link
                     href="/ingest"
-                    className="group inline-flex items-center gap-2 bg-[#DEDBC8] rounded-full pl-4 pr-1 py-1 w-fit hover:gap-3 transition-all duration-300"
+                    className="group inline-flex items-center gap-2 bg-[#DEDBC8] text-black font-medium text-sm px-5 py-3 rounded-full transition-all hover:gap-3"
                   >
-                    <span className="text-black font-medium text-sm sm:text-base whitespace-nowrap">
-                      Start building
-                    </span>
-                    <div className="bg-black rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110">
+                    <span>Start building</span>
+                    <span className="bg-black rounded-full w-9 h-9 flex items-center justify-center transition-transform group-hover:scale-110">
                       <ArrowRight size={14} color="#DEDBC8" />
-                    </div>
+                    </span>
                   </Link>
                 </FadeUp>
               </div>

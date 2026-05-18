@@ -25,6 +25,7 @@ function highlightText(text: string, query: string): React.ReactNode {
 const MAX_HISTORY = 5
 
 export default function SearchPage() {
+  const [mounted, setMounted] = useState(false)
   const [mode, setMode] = useState<'search' | 'ask'>('search')
   const [query, setQuery] = useState('')
   const [allPages, setAllPages] = useState<Page[]>([])
@@ -37,8 +38,9 @@ export default function SearchPage() {
   const [savedSlug, setSavedSlug] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Load pages + history
+  // Mount guard + load pages + history
   useEffect(() => {
+    setMounted(true)
     fetch('/api/wiki').then(r => r.json()).then(data => setAllPages(data.pages || [])).catch(() => {})
     try {
       const saved = localStorage.getItem('nw-query-history')
@@ -138,6 +140,19 @@ export default function SearchPage() {
     }
   }
 
+  if (!mounted) {
+    return (
+      <div className="bg-black min-h-screen flex flex-col items-center pt-16 px-4">
+        <div className="text-center mb-10">
+          <h1 className="font-medium leading-[0.9]"
+            style={{ fontSize: 'clamp(2.5rem, 6vw, 5rem)', color: '#E1E0CC' }}>
+            What do you know?
+          </h1>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-black min-h-screen">
       <div className="flex flex-col items-center pt-16 px-4 pb-20">
@@ -149,36 +164,33 @@ export default function SearchPage() {
           </h1>
         </div>
 
-        {/* Mode toggle */}
-        <FadeUp delay={0.3}>
-          <div className="flex gap-1 mb-5 p-1 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            {(['search', 'ask'] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setAnswer(''); setFiltered([]) }}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200"
-                style={{
-                  background: mode === m ? '#DEDBC8' : 'transparent',
-                  color: mode === m ? '#000' : 'rgba(222,219,200,0.4)',
-                }}
-              >
-                {m === 'search' ? <Search size={11} /> : <Sparkles size={11} />}
-                {m === 'search' ? 'Search' : 'Ask AI'}
-              </button>
-            ))}
-          </div>
-        </FadeUp>
+        {/* Mode toggle — no animation wrapper to avoid hydration mismatch */}
+        <div className="flex gap-1 mb-5 p-1 rounded-full"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          {(['search', 'ask'] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setAnswer(''); setFiltered([]) }}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200"
+              style={{
+                background: mode === m ? '#DEDBC8' : 'transparent',
+                color: mode === m ? '#000' : 'rgba(222,219,200,0.4)',
+              }}
+            >
+              {m === 'search' ? <Search size={11} /> : <Sparkles size={11} />}
+              {m === 'search' ? 'Search' : 'Ask AI'}
+            </button>
+          ))}
+        </div>
 
-        {/* Search bar */}
-        <FadeUp delay={0.4} className="w-full max-w-xl">
+        {/* Search bar — no FadeUp to avoid hydration issues */}
+        <div className="w-full max-w-xl">
           <div
             className="flex items-center gap-3 px-5 py-3.5 rounded-full transition-all duration-200"
             style={{
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)',
             }}
-            onFocus={() => {}}
           >
             {mode === 'search'
               ? <Search size={14} style={{ color: 'rgba(222,219,200,0.3)', flexShrink: 0 }} />
@@ -212,7 +224,7 @@ export default function SearchPage() {
               </button>
             )}
           </div>
-        </FadeUp>
+        </div>
 
         {/* Search results with highlighting */}
         {mode === 'search' && filtered.length > 0 && (

@@ -6,6 +6,7 @@ import { BackButton } from '@/components/layout/BackButton'
 import { Topbar } from '@/components/layout/Topbar'
 import { PageNav } from '@/components/layout/PageNav'
 import { PageTransition } from '@/components/PageTransition'
+import { Footer } from '@/components/Footer'
 
 export const metadata: Metadata = {
   title: 'NeuroWiki',
@@ -20,10 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Topbar />
         <BackButton />
         <PageNav />
-        <main className="min-h-screen">
+        <main className="min-h-screen flex flex-col">
           <PageTransition>
-            {children}
+            <div className="flex-1">
+              {children}
+            </div>
           </PageTransition>
+          <Footer />
         </main>
         <Toaster
           position="bottom-right"
