@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { Loader2, Zap } from 'lucide-react'
 import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
@@ -35,6 +36,7 @@ export default function AuditPage() {
 
   const fixIsland = async (index: number, slugs: string[]) => {
     setFixingIsland(index)
+    toast.loading('Fixing isolated island...', { id: 'fixIsland' })
     try {
       const res = await fetch('/api/fix-islands', {
         method: 'POST',
@@ -44,7 +46,9 @@ export default function AuditPage() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setFixResults(prev => ({ ...prev, [index]: { connected: data.connected, total: data.total } }))
+      toast.success(`Connected ${data.connected} pages to the main graph`, { id: 'fixIsland' })
     } catch (e: any) {
+      toast.error(`Fix failed: ${e.message}`, { id: 'fixIsland' })
       setLintError(`Fix failed: ${e.message}`)
     } finally {
       setFixingIsland(null)
@@ -58,12 +62,15 @@ export default function AuditPage() {
   const runLint = async () => {
     setLintLoading(true)
     setLintError(null)
+    toast.loading('Running deep lint sweep...', { id: 'lint' })
     try {
       const res = await fetch('/api/lint')
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setLint(data)
+      toast.success('Lint sweep complete', { id: 'lint' })
     } catch (e: any) {
+      toast.error(`Lint failed: ${e.message}`, { id: 'lint' })
       setLintError(e.message)
     } finally {
       setLintLoading(false)

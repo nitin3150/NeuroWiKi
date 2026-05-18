@@ -5,6 +5,7 @@ import { ArrowRight } from 'lucide-react'
 import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
+import { Onboarding } from '@/components/Onboarding'
 
 export default function Home() {
   const [pages, setPages] = useState<any[]>([])
@@ -28,6 +29,7 @@ export default function Home() {
 
   return (
     <div className="w-full min-h-screen bg-black">
+      <Onboarding />
       {/* FIX 4 — HERO SECTION WRAPPER */}
       <section className="w-full h-screen p-3 sm:p-4 md:p-5 lg:p-6">
         <div className="relative w-full h-full rounded-2xl md:rounded-[2rem] overflow-hidden bg-black">

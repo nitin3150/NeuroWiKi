@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
@@ -41,6 +42,7 @@ export default function SearchPage() {
     setLoading(true)
     setAnswer('')
     setSaved(false)
+    toast.loading('Asking AI...', { id: 'ask' })
 
     const res = await fetch('/api/query', {
       method: 'POST',
@@ -51,6 +53,7 @@ export default function SearchPage() {
     if (!res.ok) {
       const err = await res.json()
       setAnswer(err.error || 'Something went wrong.')
+      toast.error(err.error || 'Something went wrong.', { id: 'ask' })
       setLoading(false)
       return
     }
@@ -64,12 +67,14 @@ export default function SearchPage() {
       if (done) break
       setAnswer(prev => prev + decoder.decode(value))
     }
+    toast.dismiss('ask')
     setLoading(false)
   }
 
   const saveToWiki = async () => {
     if (!answer || saving) return
     setSaving(true)
+    toast.loading('Saving to wiki...', { id: 'save' })
     try {
       const res = await fetch('/api/wiki/synthesize', {
         method: 'POST',
@@ -79,10 +84,13 @@ export default function SearchPage() {
       const data = await res.json()
       if (data.slug) {
         setSaved(true)
+        toast.success('Saved to wiki!', { id: 'save' })
         setTimeout(() => router.push(`/wiki/${data.slug}`), 800)
+      } else {
+        toast.error('Failed to save to wiki', { id: 'save' })
       }
     } catch {
-      // silent fail
+      toast.error('Failed to save to wiki', { id: 'save' })
     } finally {
       setSaving(false)
     }

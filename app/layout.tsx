@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Toaster } from 'sonner'
 import { HoverSidebar } from '@/components/layout/HoverSidebar'
 import { BackButton } from '@/components/layout/BackButton'
 import { Topbar } from '@/components/layout/Topbar'
+import { PageNav } from '@/components/layout/PageNav'
 
 export const metadata: Metadata = {
   title: 'NeuroWiki',
@@ -16,9 +18,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <HoverSidebar />
         <Topbar />
         <BackButton />
+        <PageNav />
         <main className="min-h-screen">
           {children}
         </main>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background:   '#151515',
+              border:       '1px solid rgba(255,255,255,0.08)',
+              color:        '#E1E0CC',
+              fontSize:     '12px',
+              borderRadius: '12px',
+            },
+          }}
+        />
       </body>
     </html>
   )

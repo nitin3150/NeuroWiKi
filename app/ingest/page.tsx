@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
 import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
@@ -65,6 +66,7 @@ export default function IngestPage() {
     setResults([])
     setError(null)
     setSteps(INITIAL_STEPS.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending' })))
+    toast.loading('Processing source...', { id: 'ingest' })
 
     try {
       setTimeout(() => advanceStep(1), 800)
@@ -106,19 +108,36 @@ export default function IngestPage() {
         } catch { /* skip */ }
       }
 
-      if (!data) { setError('Ingest failed: no response from server'); setLoading(false); return }
-      if (data.error) { setError(`Ingest failed: ${data.error}`); setLoading(false); return }
+      if (!data) {
+        toast.error('Ingest failed: no response from server', { id: 'ingest' })
+        setError('Ingest failed: no response from server')
+        setLoading(false)
+        return
+      }
+      if (data.error) {
+        toast.error(`Ingest failed: ${data.error}`, { id: 'ingest' })
+        setError(`Ingest failed: ${data.error}`)
+        setLoading(false)
+        return
+      }
 
       setTimeout(() => {
         setSteps(prev => prev.map(s => ({ ...s, status: 'done' })))
         setResults(data.pages || [])
-        if (data.warning) setWarning(data.warning)
+        if (data.warning) {
+          setWarning(data.warning)
+          toast.warning(data.warning, { id: 'ingest' })
+        } else {
+          toast.success(`${data.pagesCreated || data.pages?.length || 0} pages created successfully`, { id: 'ingest' })
+        }
         setDone(true)
         setLoading(false)
         setFiles([])
       }, 600)
     } catch (e: any) {
-      setError(`Ingest failed: ${e?.message || 'Unknown error'}`)
+      const msg = e?.message || 'Unknown error'
+      toast.error(`Ingest failed: ${msg}`, { id: 'ingest' })
+      setError(`Ingest failed: ${msg}`)
       setLoading(false)
     }
   }
