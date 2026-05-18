@@ -30,7 +30,15 @@ function openDatabase(): Database.Database {
   db.pragma('foreign_keys = ON')
 
   createTables(db)
+  migrateColumns(db)
   return db
+}
+
+function migrateColumns(db: Database.Database): void {
+  const cols = db.pragma('table_info(pages)') as Array<{ name: string }>
+  const names = new Set(cols.map((c) => c.name))
+  if (!names.has('summary')) db.exec(`ALTER TABLE pages ADD COLUMN summary TEXT`)
+  if (!names.has('source_id')) db.exec(`ALTER TABLE pages ADD COLUMN source_id INTEGER`)
 }
 
 function createTables(db: Database.Database): void {
@@ -61,6 +69,8 @@ function createTables(db: Database.Database): void {
       slug TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
       type TEXT DEFAULT 'concept',
+      summary TEXT,
+      source_id INTEGER,
       confidence INTEGER DEFAULT 100,
       last_validated DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_stale INTEGER DEFAULT 0,
@@ -69,6 +79,7 @@ function createTables(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
 
     -- Traced query logs for observability
     CREATE TABLE IF NOT EXISTS query_logs (
@@ -79,6 +90,13 @@ function createTables(db: Database.Database): void {
       answer_length INTEGER DEFAULT 0,
       recall_strategy TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Wikilink edges parsed from page content at ingest time
+    CREATE TABLE IF NOT EXISTS page_links (
+      source_slug TEXT NOT NULL,
+      target_slug TEXT NOT NULL,
+      PRIMARY KEY (source_slug, target_slug)
     );
   `)
 }

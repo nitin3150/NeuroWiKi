@@ -2,7 +2,7 @@ import { generateObject, NoObjectGeneratedError } from 'ai'
 import { google } from '@ai-sdk/google'
 import { z } from 'zod'
 import { hydra, ensureTenant, waitForIngestion } from '../hydra'
-import { upsertPageHealth } from '../db-helpers'
+import { upsertPageHealth, upsertPageLinks, getAllPages } from '../db-helpers'
 
 export interface IngestResult {
   pagesCreated: number
@@ -109,6 +109,14 @@ Return JSON with a "pages" key containing an array. Each page must include:
   const pages: Array<{ slug: string; title: string; content: string; isNew: boolean; indexed: boolean }> = []
   let pagesCreated = 0
 
+  // Collect existing hydra_doc_ids to forcefully relate new pages to them
+  const existingHydraIds = getAllPages()
+    .map((p) => p.hydra_doc_id)
+    .filter((id): id is string => !!id)
+
+  // Track real source IDs of pages uploaded in this batch for sibling cross-linking
+  const batchHydraIds: string[] = []
+
   // Step 3 — Verify and Store each page in HydraDB as Knowledge
   for (const page of result.object.pages) {
     try {
@@ -117,6 +125,9 @@ Return JSON with a "pages" key containing an array. Each page must include:
         console.warn(`Skipping page ${page.slug} — claims could not be verified against source`)
         continue
       }
+
+      // All existing pages + siblings already uploaded this batch
+      const cortexSourceIds = [...existingHydraIds, ...batchHydraIds].filter(Boolean)
 
       const uploadResponse = await hydra.upload.knowledge({
         tenant_id: tenantId,
@@ -140,22 +151,32 @@ Return JSON with a "pages" key containing an array. Each page must include:
               sourceId: sourceId.toString(),
               slug: page.slug,
             },
+            ...(cortexSourceIds.length > 0 && {
+              relations: { cortex_source_ids: cortexSourceIds },
+            }),
           },
         ]),
       }) as any
 
       // Use real source_id from upload response for status polling
       const realSourceId = uploadResponse?.results?.[0]?.source_id ?? page.slug
+      batchHydraIds.push(realSourceId)
       const ready = await waitForIngestion(realSourceId, tenantId)
 
       upsertPageHealth({
         slug: page.slug,
         title: page.title,
         type: page.type,
+        summary: page.summary,
+        source_id: sourceId,
         confidence: ready ? 100 : 60,
         stale_reason: ready ? undefined : 'Indexing may be incomplete',
         hydra_doc_id: realSourceId,
       })
+
+      // Parse [[wikilinks]] from content and store graph edges in SQLite
+      const linkedSlugs = [...page.content.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1].trim())
+      if (linkedSlugs.length) upsertPageLinks(page.slug, linkedSlugs)
 
       pages.push({
         slug: page.slug,

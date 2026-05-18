@@ -17,7 +17,7 @@ const TYPE_COLORS: Record<string, string> = {
   default: '#888880',
 }
 
-interface GraphNode { id: string; slug: string; title: string; type: string; connections: number; x?: number; y?: number }
+interface GraphNode { id: string; slug: string; title: string; type: string; summary: string; connections: number; x?: number; y?: number }
 interface GraphLink { source: string; target: string }
 interface SelectedNode { slug: string; title: string; type: string; summary?: string }
 
@@ -35,7 +35,7 @@ export default function GraphPage() {
   }, [])
 
   const handleNodeClick = useCallback((node: GraphNode) => {
-    setSelected({ slug: node.slug, title: node.title, type: node.type })
+    setSelected({ slug: node.slug, title: node.title, type: node.type, summary: node.summary })
   }, [])
 
   const paintNode = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D) => {
@@ -47,12 +47,10 @@ export default function GraphPage() {
     ctx.fillStyle = color
     ctx.fill()
 
-    if (size > 6) {
-      ctx.font = `${Math.max(3, size * 0.9)}px Almarai`
-      ctx.fillStyle = 'rgba(222,219,200,0.6)'
-      ctx.textAlign = 'center'
-      ctx.fillText(node.title?.slice(0, 15), node.x as number, (node.y as number) + size + 4)
-    }
+    ctx.font = `${Math.max(8, size * 0.9)}px sans-serif`
+    ctx.fillStyle = 'rgba(222,219,200,0.7)'
+    ctx.textAlign = 'center'
+    ctx.fillText(node.title?.slice(0, 20), node.x as number, (node.y as number) + size + 9)
   }, [])
 
   return (
@@ -122,7 +120,10 @@ export default function GraphPage() {
               <X size={14} style={{ color: 'rgba(222,219,200,0.4)' }} />
             </button>
           </div>
-          <h3 className="text-base font-medium mb-3" style={{ color: '#E1E0CC' }}>{selected.title}</h3>
+          <h3 className="text-base font-medium mb-2" style={{ color: '#E1E0CC' }}>{selected.title}</h3>
+          {selected.summary && (
+            <p className="text-[11px] mb-3 leading-relaxed" style={{ color: 'rgba(222,219,200,0.5)' }}>{selected.summary}</p>
+          )}
           <Link
             href={`/wiki/${selected.slug}`}
             className="text-[11px] tracking-wider uppercase transition-opacity hover:opacity-100"
