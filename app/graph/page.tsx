@@ -83,9 +83,9 @@ export default function GraphPage() {
       )}
 
       {/* Top left overlay */}
-      <div className="absolute top-4 left-4 z-10 pointer-events-none">
-        <p className="text-xs" style={{ color: 'rgba(222,219,200,0.4)' }}>NeuroWiki Graph</p>
-        <p className="text-[10px]" style={{ color: 'rgba(222,219,200,0.2)' }}>
+      <div className="absolute top-20 left-7 z-10 pointer-events-none">
+        <p className="text-sm font-semibold" style={{ color: 'rgba(222,219,200,0.8)' }}>NeuroWiki Graph</p>
+        <p className="text-xs font-medium mt-0.5" style={{ color: 'rgba(222,219,200,0.5)' }}>
           {graphData?.nodes?.length ?? 0} pages · {graphData?.links?.length ?? 0} connections
         </p>
       </div>
