@@ -91,12 +91,7 @@ export default function SearchPage() {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
-        // Parse Vercel AI SDK stream format
-        const lines = chunk.split('\n').filter(l => l.startsWith('0:'))
-        const text = lines.map(l => {
-          try { return JSON.parse(l.slice(2)) } catch { return '' }
-        }).join('')
-        if (text) setAnswer(prev => prev + text)
+        if (chunk) setAnswer(prev => prev + chunk)
       }
     } catch (err) {
       toast.error('Search failed. Please try again.')
