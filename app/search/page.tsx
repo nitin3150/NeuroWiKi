@@ -37,7 +37,7 @@ export default function SearchPage() {
 
   // Load pages + history
   useEffect(() => {
-    fetch('/api/wiki').then(r => r.json()).then(setAllPages).catch(() => {})
+    fetch('/api/wiki').then(r => r.json()).then(data => setAllPages(data.pages || [])).catch(() => {})
     try {
       const saved = localStorage.getItem('nw-query-history')
       if (saved) setHistory(JSON.parse(saved))
