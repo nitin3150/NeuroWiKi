@@ -1,106 +1,129 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Search, Sparkles, Clock, Copy, Check, Clipboard } from 'lucide-react'
 import { toast } from 'sonner'
-import { WordsPullUp } from '@/components/animations/WordsPullUp'
 import { FadeUp } from '@/components/animations/FadeUp'
 import { TypeBadge } from '@/components/TypeBadge'
-import Link from 'next/link'
-import { Search, Sparkles, BookmarkPlus, Check } from 'lucide-react'
+import { WordsPullUp } from '@/components/animations/WordsPullUp'
 
 interface Page { slug: string; title: string; summary: string; type: string }
 
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi')
+  const parts = text.split(regex)
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark key={i} style={{ background: 'rgba(222,219,200,0.2)', color: '#E1E0CC', borderRadius: '2px' }}>
+        {part}
+      </mark>
+    ) : part
+  )
+}
+
+const MAX_HISTORY = 5
+
 export default function SearchPage() {
-  const router = useRouter()
   const [mode, setMode] = useState<'search' | 'ask'>('search')
   const [query, setQuery] = useState('')
-  const [pages, setPages] = useState<Page[]>([])
+  const [allPages, setAllPages] = useState<Page[]>([])
   const [filtered, setFiltered] = useState<Page[]>([])
   const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [history, setHistory] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Load pages + history
   useEffect(() => {
-    fetch('/api/wiki').then(r => r.json()).then(data => setPages(data.pages || []))
+    fetch('/api/wiki').then(r => r.json()).then(setAllPages).catch(() => {})
+    try {
+      const saved = localStorage.getItem('nw-query-history')
+      if (saved) setHistory(JSON.parse(saved))
+    } catch {}
   }, [])
 
+  // Filter pages
   useEffect(() => {
-    if (mode === 'search' && query.trim()) {
-      const q = query.toLowerCase()
-      setFiltered(pages.filter(p =>
-        p.title?.toLowerCase().includes(q) || p.summary?.toLowerCase().includes(q)
-      ))
-    } else {
-      setFiltered([])
-    }
-  }, [query, pages, mode])
+    if (mode !== 'search' || !query.trim()) { setFiltered([]); return }
+    const q = query.toLowerCase()
+    setFiltered(
+      allPages
+        .filter(p =>
+          p.title.toLowerCase().includes(q) ||
+          (p.summary || '').toLowerCase().includes(q)
+        )
+        .slice(0, 8)
+    )
+  }, [query, allPages, mode])
 
-  const handleAsk = async () => {
-    if (!query.trim()) return
-    setLoading(true)
-    setAnswer('')
-    setSaved(false)
-    toast.loading('Asking AI...', { id: 'ask' })
-
-    const res = await fetch('/api/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: query }),
-    })
-
-    if (!res.ok) {
-      const err = await res.json()
-      setAnswer(err.error || 'Something went wrong.')
-      toast.error(err.error || 'Something went wrong.', { id: 'ask' })
-      setLoading(false)
-      return
-    }
-
-    const reader = res.body?.getReader()
-    const decoder = new TextDecoder()
-    if (!reader) return
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      setAnswer(prev => prev + decoder.decode(value))
-    }
-    toast.dismiss('ask')
-    setLoading(false)
+  const saveToHistory = (q: string) => {
+    const next = [q, ...history.filter(h => h !== q)].slice(0, MAX_HISTORY)
+    setHistory(next)
+    localStorage.setItem('nw-query-history', JSON.stringify(next))
   }
 
-  const saveToWiki = async () => {
-    if (!answer || saving) return
-    setSaving(true)
-    toast.loading('Saving to wiki...', { id: 'save' })
+  const handleAsk = async (q = query) => {
+    if (!q.trim()) return
+    setQuery(q)
+    setLoading(true)
+    setAnswer('')
+    saveToHistory(q)
+
     try {
-      const res = await fetch('/api/wiki/synthesize', {
+      const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: query, answer }),
+        body: JSON.stringify({ question: q }),
       })
-      const data = await res.json()
-      if (data.slug) {
-        setSaved(true)
-        toast.success('Saved to wiki!', { id: 'save' })
-        setTimeout(() => router.push(`/wiki/${data.slug}`), 800)
-      } else {
-        toast.error('Failed to save to wiki', { id: 'save' })
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.body) throw new Error('No body')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        // Parse Vercel AI SDK stream format
+        const lines = chunk.split('\n').filter(l => l.startsWith('0:'))
+        const text = lines.map(l => {
+          try { return JSON.parse(l.slice(2)) } catch { return '' }
+        }).join('')
+        if (text) setAnswer(prev => prev + text)
       }
-    } catch {
-      toast.error('Failed to save to wiki', { id: 'save' })
+    } catch (err) {
+      toast.error('Search failed. Please try again.')
+      console.error(err)
     } finally {
-      setSaving(false)
+      setLoading(false)
+    }
+  }
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(answer)
+    setCopied(true)
+    toast.success('Answer copied')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      setQuery(text)
+      inputRef.current?.focus()
+    } catch {
+      toast.error('Could not read clipboard')
     }
   }
 
   return (
     <div className="bg-black min-h-screen">
-      <div className="flex flex-col items-center pt-20 px-4">
+      <div className="flex flex-col items-center pt-16 px-4 pb-20">
 
-        {/* Header */}
         <div className="text-center mb-10">
           <h1 className="font-medium leading-[0.9]"
             style={{ fontSize: 'clamp(2.5rem, 6vw, 5rem)', color: '#E1E0CC' }}>
@@ -110,13 +133,17 @@ export default function SearchPage() {
 
         {/* Mode toggle */}
         <FadeUp delay={0.3}>
-          <div className="flex gap-1 mb-6 bg-[#111] rounded-full p-1">
+          <div className="flex gap-1 mb-5 p-1 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {(['search', 'ask'] as const).map(m => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setAnswer(''); inputRef.current?.focus() }}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200 ${mode === m ? 'bg-[#DEDBC8] text-black' : ''}`}
-                style={{ color: mode === m ? '#000' : 'rgba(222,219,200,0.4)' }}
+                onClick={() => { setMode(m); setAnswer(''); setFiltered([]) }}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] tracking-wider uppercase transition-all duration-200"
+                style={{
+                  background: mode === m ? '#DEDBC8' : 'transparent',
+                  color: mode === m ? '#000' : 'rgba(222,219,200,0.4)',
+                }}
               >
                 {m === 'search' ? <Search size={11} /> : <Sparkles size={11} />}
                 {m === 'search' ? 'Search' : 'Ask AI'}
@@ -127,25 +154,41 @@ export default function SearchPage() {
 
         {/* Search bar */}
         <FadeUp delay={0.4} className="w-full max-w-xl">
-          <div className="flex items-center gap-3 bg-[#0f0f0f] border border-white/10 rounded-full px-5 py-3.5 focus-within:border-white/20 transition-all duration-200">
+          <div
+            className="flex items-center gap-3 px-5 py-3.5 rounded-full transition-all duration-200"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+            onFocus={() => {}}
+          >
             {mode === 'search'
-              ? <Search size={14} style={{ color: 'rgba(222,219,200,0.3)' }} />
-              : <Sparkles size={14} style={{ color: 'rgba(222,219,200,0.3)' }} />
+              ? <Search size={14} style={{ color: 'rgba(222,219,200,0.3)', flexShrink: 0 }} />
+              : <Sparkles size={14} style={{ color: 'rgba(222,219,200,0.3)', flexShrink: 0 }} />
             }
             <input
               ref={inputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && mode === 'ask' && handleAsk()}
-              placeholder={mode === 'search' ? 'Search your wiki...' : 'Ask anything about your wiki...'}
+              placeholder={mode === 'search' ? 'Search your wiki...' : 'Ask anything...'}
               className="flex-1 bg-transparent outline-none text-sm"
               style={{ color: '#DEDBC8' }}
               autoFocus
             />
+            {/* Paste button */}
+            <button
+              onClick={handlePaste}
+              className="opacity-30 hover:opacity-70 transition-opacity flex-shrink-0"
+              title="Paste from clipboard"
+            >
+              <Clipboard size={13} color="#DEDBC8" />
+            </button>
             {mode === 'ask' && (
               <button
-                onClick={handleAsk}
-                className="bg-[#DEDBC8] text-black text-[10px] font-medium px-3 py-1 rounded-full hover:opacity-90 transition"
+                onClick={() => handleAsk()}
+                disabled={loading || !query.trim()}
+                className="bg-[#DEDBC8] text-black text-[10px] font-medium px-3 py-1.5 rounded-full hover:opacity-90 transition disabled:opacity-40 flex-shrink-0"
               >
                 Ask
               </button>
@@ -153,19 +196,25 @@ export default function SearchPage() {
           </div>
         </FadeUp>
 
-        {/* Search results */}
+        {/* Search results with highlighting */}
         {mode === 'search' && filtered.length > 0 && (
-          <div className="w-full max-w-xl mt-4 space-y-2">
+          <div className="w-full max-w-xl mt-3 space-y-2">
             {filtered.map((page, i) => (
-              <FadeUp key={page.slug} delay={i * 0.05}>
+              <FadeUp key={page.slug} delay={i * 0.04}>
                 <Link href={`/wiki/${page.slug}`}>
-                  <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl p-4 hover:border-white/15 transition-all duration-200">
+                  <div
+                    className="rounded-2xl p-4 hover:bg-white/4 transition-all duration-200"
+                    style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                  >
                     <div className="flex items-center gap-2 mb-2">
                       <TypeBadge type={page.type} />
                     </div>
-                    <h3 className="text-sm font-medium mb-1" style={{ color: '#E1E0CC' }}>{page.title}</h3>
-                    <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'rgba(222,219,200,0.4)' }}>
-                      {page.summary}
+                    <h3 className="text-sm font-medium mb-1" style={{ color: '#E1E0CC' }}>
+                      {highlightText(page.title, query)}
+                    </h3>
+                    <p className="text-[11px] leading-relaxed line-clamp-2"
+                      style={{ color: 'rgba(222,219,200,0.4)' }}>
+                      {highlightText(page.summary || '', query)}
                     </p>
                   </div>
                 </Link>
@@ -174,48 +223,103 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* AI Answer */}
-        {mode === 'ask' && (answer || loading) && (
-          <FadeUp delay={0.1} className="w-full max-w-xl mt-6">
-            <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-8">
-              <p className="text-[9px] tracking-[0.3em] uppercase mb-5" style={{ color: 'rgba(222,219,200,0.3)' }}>
-                Answer
-              </p>
-              {loading && !answer && (
-                <div className="flex gap-1">
-                  {[0, 1, 2].map(i => (
-                    <span key={i} className="w-1.5 h-1.5 rounded-full bg-[#DEDBC8] animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s`, opacity: 0.6 }} />
-                  ))}
-                </div>
-              )}
-              {answer && (
-                <>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap"
-                    style={{ color: 'rgba(222,219,200,0.8)' }}>
-                    {answer}
-                  </p>
-                  {!loading && (
-                    <button
-                      onClick={saveToWiki}
-                      disabled={saving || saved}
-                      className="mt-6 flex items-center gap-2 text-[10px] px-4 py-2 rounded-full border border-white/15 hover:border-white/30 transition disabled:opacity-50"
-                      style={{ color: saved ? '#4ade80' : 'rgba(222,219,200,0.6)' }}
-                    >
-                      {saved
-                        ? <><Check size={11} /> Saved — navigating...</>
-                        : saving
-                        ? 'Saving...'
-                        : <><BookmarkPlus size={11} /> Save to Wiki</>
-                      }
-                    </button>
-                  )}
-                </>
-              )}
+        {mode === 'search' && query && filtered.length === 0 && (
+          <FadeUp delay={0.1} className="w-full max-w-xl mt-4 text-center py-8">
+            <p className="text-sm" style={{ color: 'rgba(222,219,200,0.3)' }}>
+              No pages found. Try switching to Ask AI mode.
+            </p>
+          </FadeUp>
+        )}
+
+        {/* Query history */}
+        {mode === 'ask' && !query && history.length > 0 && (
+          <FadeUp delay={0.2} className="w-full max-w-xl mt-4">
+            <p className="text-[9px] tracking-[0.3em] uppercase mb-3"
+              style={{ color: 'rgba(222,219,200,0.25)' }}>
+              Recent questions
+            </p>
+            <div className="space-y-1">
+              {history.map((h, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleAsk(h)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left hover:bg-white/4 transition-colors group"
+                >
+                  <Clock size={12} style={{ color: 'rgba(222,219,200,0.25)', flexShrink: 0 }} />
+                  <span className="text-[12px] truncate group-hover:opacity-100 transition-opacity"
+                    style={{ color: 'rgba(222,219,200,0.5)' }}>
+                    {h}
+                  </span>
+                </button>
+              ))}
             </div>
           </FadeUp>
         )}
 
+        {/* AI Answer */}
+        {mode === 'ask' && (answer || loading) && (
+          <FadeUp delay={0.1} className="w-full max-w-xl mt-6">
+            <div
+              className="rounded-2xl p-6"
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[9px] tracking-[0.3em] uppercase"
+                  style={{ color: 'rgba(222,219,200,0.25)' }}>Answer</p>
+                {answer && (
+                  <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 text-[10px] hover:opacity-100 transition-opacity"
+                    style={{ color: 'rgba(222,219,200,0.35)' }}
+                  >
+                    {copied ? <Check size={11} /> : <Copy size={11} />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                )}
+              </div>
+
+              {loading && !answer && (
+                <div className="flex gap-1.5">
+                  {[0, 1, 2].map(i => (
+                    <span
+                      key={i}
+                      className="w-1.5 h-1.5 rounded-full animate-bounce"
+                      style={{
+                        background: '#DEDBC8',
+                        opacity: 0.5,
+                        animationDelay: `${i * 0.15}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {answer && (
+                <p
+                  className="text-sm leading-relaxed whitespace-pre-wrap"
+                  style={{ color: 'rgba(222,219,200,0.8)' }}
+                >
+                  {answer}
+                </p>
+              )}
+            </div>
+
+            {answer && (
+              <FadeUp delay={0.2}>
+                <button
+                  onClick={() => { setAnswer(''); setQuery(''); inputRef.current?.focus() }}
+                  className="mt-3 text-[11px] tracking-wider uppercase hover:opacity-100 transition-opacity"
+                  style={{ color: 'rgba(222,219,200,0.3)' }}
+                >
+                  Ask another question
+                </button>
+              </FadeUp>
+            )}
+          </FadeUp>
+        )}
       </div>
     </div>
   )
