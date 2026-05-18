@@ -43,11 +43,7 @@ export function PageNav() {
   const [cmdOpen, setCmdOpen]  = useState(false)
   const breadcrumbs            = getBreadcrumbs(pathname)
 
-  // Hide on home page
-  if (pathname === '/') return null
-
   // Cmd+K / Ctrl+K global shortcut
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -58,6 +54,9 @@ export function PageNav() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  // Hide on home page
+  if (pathname === '/') return null
 
   return (
     <>

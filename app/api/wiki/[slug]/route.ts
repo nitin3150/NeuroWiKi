@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { hydra } from '@/lib/hydra'
+import { hydra, ensureTenant, waitForIngestion } from '@/lib/hydra'
 import { db } from '@/lib/db'
+import { upsertPageHealth, upsertPageLinks, getSourceById } from '@/lib/db-helpers'
 
 export async function GET(
   req: NextRequest,
@@ -63,12 +64,26 @@ export async function GET(
 
     const meta = parsedDoc?.document_metadata ?? pageSource.additional_metadata ?? {}
 
+    // Resolve sources: page metadata stores sourceId; SQLite has full source records
+    const sourceIds: number[] = []
+    const rawSourceId = meta.sourceId ?? meta.source_id
+    if (rawSourceId !== undefined && rawSourceId !== null) {
+      const n = typeof rawSourceId === 'number' ? rawSourceId : parseInt(String(rawSourceId), 10)
+      if (!isNaN(n)) sourceIds.push(n)
+    }
+
+    const pageSources = sourceIds
+      .map((id) => getSourceById(id))
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      .map((s) => ({ title: s.title ?? 'Source', url: s.url ?? undefined }))
+
     const page = {
       slug: (meta.slug as string) || pageSource.id,
       title: parsedDoc?.title || pageSource.title || 'Unknown Title',
       type: (meta.category as string) || 'concept',
       summary: (meta.summary as string) || '',
       content,
+      sources: pageSources,
       created_at: parsedDoc?.timestamp || pageSource.timestamp || '',
     }
     // 2. Fetch related pages using fullRecall — also returns RetrievalResult
@@ -112,10 +127,59 @@ export async function GET(
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const resolvedParams = await params
+  const { slug } = await params
   const { title, content, summary, type } = await req.json()
-  const { upsertPage } = await import('@/lib/db-helpers')
-  const page = upsertPage({ slug: resolvedParams.slug, title, content, summary, type })
-  return NextResponse.json({ page })
+
+  try {
+    await ensureTenant('default')
+
+    const cleanedContent = content.replace(/^#\s+.+\n+/, '')
+
+    const uploadResponse = await hydra.upload.knowledge({
+      tenant_id: 'default',
+      upsert: true,
+      app_knowledge: JSON.stringify([
+        {
+          tenant_id: 'default',
+          sub_tenant_id: 'default',
+          id: slug,
+          title,
+          type: 'document',
+          content: { markdown: `# ${title}\n\n${cleanedContent}` },
+          document_metadata: {
+            category: type ?? 'concept',
+            summary: summary ?? '',
+            slug,
+            verified: true,
+            verifiedAt: new Date().toISOString(),
+            manuallyEdited: true,
+          },
+        },
+      ]),
+    }) as any
+
+    const realSourceId = uploadResponse?.results?.[0]?.source_id ?? slug
+    const ready = await waitForIngestion(realSourceId, 'default')
+
+    upsertPageHealth({
+      slug,
+      title,
+      type: type ?? 'concept',
+      summary: summary ?? '',
+      confidence: ready ? 100 : 60,
+      stale_reason: ready ? undefined : 'Indexing may be incomplete',
+      hydra_doc_id: realSourceId,
+    })
+
+    // Refresh wikilink graph from new content
+    db.prepare(`DELETE FROM page_links WHERE source_slug = ?`).run(slug)
+    const linkedSlugs = [...cleanedContent.matchAll(/\[\[([^\]]+)\]\]/g)].map((m: any) => m[1].trim())
+    if (linkedSlugs.length) upsertPageLinks(slug, linkedSlugs)
+
+    return NextResponse.json({ page: { slug, title, content: cleanedContent, summary, type } })
+  } catch (error: any) {
+    console.error(`Error updating page ${slug}:`, error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
 

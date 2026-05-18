@@ -16,8 +16,7 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         if (data.pages) {
-          // Take last 6 pages
-          setPages(data.pages.slice(0, 6))
+          setPages(data.pages)
         }
         setLoading(false)
       })
@@ -36,7 +35,8 @@ export default function Home() {
           
           {/* Video — BOTTOM layer */}
           <video
-            autoPlay loop muted playsInline preload="none"
+            autoPlay loop muted playsInline preload="metadata"
+            poster="/hero-poster.jpg"
             className="absolute inset-0 w-full h-full object-cover object-center"
             src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_170732_8a9ccda6-5cff-4628-b164-059c500a2b41.mp4"
           />
@@ -161,33 +161,32 @@ export default function Home() {
 
         {!loading && pages.length > 0 && (
           <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {pages.map((page, index) => (
-              <FadeUp key={page.slug} delay={index * 0.08} className="flex-shrink-0">
-                <Link
-                  href={`/wiki/${page.slug}`}
-                  className="block w-52 sm:w-60 md:w-64 bg-[#101010] rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-transparent hover:border-white/10 transition-all duration-300 cursor-pointer h-full group"
+            {pages.map((page) => (
+              <Link
+                key={page.slug}
+                href={`/wiki/${page.slug}`}
+                className="flex-shrink-0 block w-52 sm:w-60 md:w-64 bg-[#101010] rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-transparent hover:border-white/10 transition-colors duration-300 cursor-pointer group"
+              >
+                <TypeBadge type={page.type} />
+                <h3
+                  className="text-sm sm:text-base font-medium mt-2 sm:mt-3 mb-1 leading-tight"
+                  style={{ color: '#E1E0CC' }}
                 >
-                  <TypeBadge type={page.type} />
-                  <h3
-                    className="text-sm sm:text-base font-medium mt-2 sm:mt-3 mb-1 leading-tight"
-                    style={{ color: '#E1E0CC' }}
-                  >
-                    {page.title}
-                  </h3>
-                  <p
-                    className="text-[10px] sm:text-[11px] leading-relaxed line-clamp-3"
-                    style={{ color: 'rgba(222,219,200,0.45)' }}
-                  >
-                    {page.summary || 'No summary available for this page.'}
-                  </p>
-                  <p
-                    className="text-[8px] sm:text-[9px] mt-3 sm:mt-4"
-                    style={{ color: 'rgba(222,219,200,0.25)' }}
-                  >
-                    {new Date(page.created_at || Date.now()).toLocaleDateString()}
-                  </p>
-                </Link>
-              </FadeUp>
+                  {page.title}
+                </h3>
+                <p
+                  className="text-[10px] sm:text-[11px] leading-relaxed line-clamp-3"
+                  style={{ color: 'rgba(222,219,200,0.45)' }}
+                >
+                  {page.summary || 'No summary available for this page.'}
+                </p>
+                <p
+                  className="text-[8px] sm:text-[9px] mt-3 sm:mt-4"
+                  style={{ color: 'rgba(222,219,200,0.25)' }}
+                >
+                  {new Date(page.created_at || Date.now()).toLocaleDateString()}
+                </p>
+              </Link>
             ))}
           </div>
         )}

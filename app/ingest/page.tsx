@@ -161,8 +161,17 @@ export default function IngestPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url }),
         })
-        const data = await res.json()
-        allResults.push(...(data.pages || []))
+        const textResponse = await res.text()
+        const respLines = textResponse.split('\n').filter(Boolean)
+        let data: any = null
+        for (let j = respLines.length - 1; j >= 0; j--) {
+          try {
+            const parsed = JSON.parse(respLines[j])
+            if (parsed.final || parsed.error) { data = parsed; break }
+          } catch { /* skip */ }
+        }
+        if (data?.error) throw new Error(data.error)
+        allResults.push(...(data?.pages || []))
       } catch {
         toast.error(`Failed: ${url}`)
       }
